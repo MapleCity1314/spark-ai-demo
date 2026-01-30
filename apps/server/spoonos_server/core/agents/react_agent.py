@@ -1,7 +1,6 @@
 import asyncio
-import inspect
 import uuid
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from spoon_ai.agents.spoon_react import SpoonReactAI
 from spoon_ai.chat import ChatBot
@@ -84,80 +83,13 @@ def create_react_agent(
         f"\n\nAvailable tools:\n{tool_list}"
     )
 
-    agent_ref: Dict[str, Optional[SpoonReactAI]] = {"agent": None}
-
-    def enqueue_delta(text: str) -> None:
-        if not text:
-            return
-        target = agent_ref["agent"]
-        if target is None:
-            return
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(target.output_queue.put(text))
-        except RuntimeError:
-            try:
-                target.output_queue.put_nowait(text)
-            except Exception:
-                pass
-
-    def extract_text_from_callback(*args: Any, **kwargs: Any) -> Optional[str]:
-        for key in ("delta", "token", "text", "content"):
-            value = kwargs.get(key)
-            if isinstance(value, str):
-                return value
-        for arg in args:
-            if isinstance(arg, str):
-                return arg
-            if isinstance(arg, dict):
-                for key in ("delta", "token", "text", "content"):
-                    value = arg.get(key)
-                    if isinstance(value, str):
-                        return value
-        return None
-
-    def token_callback(*args: Any, **kwargs: Any) -> None:
-        text = extract_text_from_callback(*args, **kwargs)
-        if text:
-            enqueue_delta(text)
-
-    def build_chatbot_kwargs(
-        base_kwargs: Dict[str, Any],
-        callback: Callable[..., None],
-    ) -> Dict[str, Any]:
-        try:
-            sig = inspect.signature(ChatBot.__init__)
-            params = sig.parameters
-        except (TypeError, ValueError):
-            return base_kwargs
-        stream_kwargs: Dict[str, Any] = {}
-        if "stream" in params:
-            stream_kwargs["stream"] = True
-        if "streaming" in params:
-            stream_kwargs["streaming"] = True
-        for key in (
-            "stream_callback",
-            "on_stream",
-            "on_token",
-            "token_callback",
-            "callback",
-        ):
-            if key in params:
-                stream_kwargs[key] = callback
-                break
-        if "callbacks" in params and "callbacks" not in base_kwargs:
-            stream_kwargs["callbacks"] = [callback]
-        return {**base_kwargs, **stream_kwargs}
-
-    llm_kwargs = build_chatbot_kwargs(
-        {
-            "llm_provider": provider or config.llm.provider,
-            "model_name": model or config.llm.model,
-            "api_key": config.llm.api_key,
-            "base_url": config.llm.base_url,
-        },
-        token_callback,
-    )
+    llm_kwargs = {
+        "llm_provider": provider or config.llm.provider,
+        "model_name": model or config.llm.model,
+        "api_key": config.llm.api_key,
+        "base_url": config.llm.base_url,
+        "stream": True,
+    }
 
     agent = SpoonReactAI(
         name="spoon_react_server",
@@ -165,7 +97,6 @@ def create_react_agent(
         tools=tool_manager,
         max_steps=8,
     )
-    agent_ref["agent"] = agent
     agent.system_prompt = prompt
     async def emit(ai_message: Dict[str, Any]) -> None:
         await agent.output_queue.put(ai_message)
@@ -226,7 +157,27 @@ async def stream_agent_events(
         finally:
             agent.task_done.set()
 
+    async def stream_llm_tokens() -> None:
+        llm = getattr(agent, "llm", None)
+        if not llm or not hasattr(llm, "astream"):
+            return
+        try:
+            async for chunk in llm.astream(
+                messages=[{"role": "user", "content": user_message}],
+                system_msg=getattr(agent, "system_prompt", None),
+            ):
+                delta = getattr(chunk, "delta", None)
+                if delta is None:
+                    delta = getattr(chunk, "content", None)
+                if delta is None:
+                    delta = str(chunk)
+                if delta:
+                    await agent.output_queue.put({"delta": str(delta)})
+        except Exception:
+            return
+
     run_task = asyncio.create_task(run_and_signal())
+    token_task = asyncio.create_task(stream_llm_tokens())
     queue = agent.output_queue
     message_id = str(uuid.uuid4())
     buffer = ""
@@ -254,6 +205,7 @@ async def stream_agent_events(
                     break
 
         result = await run_task
+        token_task.cancel()
         if result:
             buffer = str(result)
         if buffer:

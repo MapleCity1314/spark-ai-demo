@@ -95,11 +95,21 @@ export function ChatRender({
                     </Attachments>
                   )}
 
-                  {textParts.map((part, index) => (
-                    <MessageResponse key={`message-${message.id}-${index}`}>
-                      {part.text}
-                    </MessageResponse>
-                  ))}
+                  {textParts.length > 0 ? (
+                    textParts.map((part, index) => (
+                      <MessageResponse key={`message-${message.id}-${index}`}>
+                        {part.text}
+                      </MessageResponse>
+                    ))
+                  ) : message.role === "assistant" ? (
+                    <div className="flex items-center justify-center p-4">
+                      <div className="flex space-x-2">
+                        <div className="w-3 h-3 bg-primary animate-pulse"></div>
+                        <div className="w-3 h-3 bg-primary animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-3 h-3 bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {questionnaireParts.map((part, index) => {
                     const payload = part.output as {
@@ -116,9 +126,9 @@ export function ChatRender({
                     const isActive = question.question_id === activeQuestionId;
                     return (
                       <div
-                        key={`questionnaire-${message.id}-${index}`}
-                        className="mt-3 rounded-2xl border border-border bg-background/90 px-4 py-3 shadow-sm"
-                      >
+                      key={`questionnaire-${message.id}-${index}`}
+                      className="mt-3 border-2 border-border bg-background/90 px-4 py-3 shadow-[3px_3px_0px_0px_rgba(0,0,0,0.8)]"
+                    >
                         {question.title && (
                           <div className="text-xs text-muted-foreground">
                             {question.title} · 第 {question.index}/{question.total} 题

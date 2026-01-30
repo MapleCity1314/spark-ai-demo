@@ -721,16 +721,16 @@ export const PromptInput = ({
       >
         <InputGroup
           className={cn(
-            "relative flex flex-col overflow-hidden shadow-sm",
-            "rounded-[26px] border transition-all duration-300 ease-in-out",
+            "relative flex flex-col overflow-hidden",
+            "rounded-none border-2 transition-all",
             
             // Light
-            "bg-white border-zinc-200",
-            "focus-within:border-zinc-300 focus-within:ring-1 focus-within:ring-zinc-200 focus-within:shadow-xl",
+            "bg-white border-black",
+            "shadow-[3px_3px_0px_0px_rgba(0,0,0,0.8)]",
             
             // Dark
-            "dark:bg-zinc-900 dark:border-zinc-800",
-            "dark:focus-within:border-zinc-700 dark:focus-within:ring-zinc-700/50",
+            "dark:bg-zinc-900 dark:border-white",
+            "dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,0.8)]",
             
             // 确保有 block-start 和 block-end 时高度自适应
             "has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-end]]:h-auto"
@@ -845,32 +845,32 @@ export const PromptInputTextarea = ({
         maxHeight: isExpanded ? '160px' : '44px',
       }}
       className={cn(
-        "w-full resize-none border-0 bg-transparent px-5 text-base shadow-none outline-none transition-all duration-200",
+        "w-full resize-none border-0 bg-transparent px-4 text-base shadow-none outline-none transition-all",
         
         // Light
-        "text-zinc-900 placeholder:text-zinc-500 caret-zinc-900 selection:bg-zinc-200 selection:text-zinc-900",
+        "text-black placeholder:text-gray-500 caret-black selection:bg-yellow-200 selection:text-black",
         // Dark
-        "dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:caret-white dark:selection:bg-zinc-700 dark:selection:text-white",
+        "dark:text-white dark:placeholder:text-gray-400 dark:caret-white dark:selection:bg-yellow-600 dark:selection:text-black",
         
         // Disabled state
         disabled && [
           "cursor-not-allowed",
-          "text-zinc-400 placeholder:text-zinc-300",
-          "dark:text-zinc-600 dark:placeholder:text-zinc-700",
+          "text-gray-400 placeholder:text-gray-600",
+          "dark:text-gray-600 dark:placeholder:text-gray-700",
         ],
         
         "focus-visible:ring-0 focus-visible:ring-offset-0",
         // 两种固定高度状态 - 减少内边距让文本更靠近边框
-        isExpanded ? "py-2 overflow-y-auto" : "py-2 overflow-hidden",
+        isExpanded ? "py-3 overflow-y-auto" : "py-3 overflow-hidden",
         
         // 自定义滚动条样式（仅在展开时显示）
         isExpanded && [
-          "[&::-webkit-scrollbar]:w-1.5",
+          "[&::-webkit-scrollbar]:w-2",
           "[&::-webkit-scrollbar-track]:bg-transparent",
           // Light Scrollbar
-          "[&::-webkit-scrollbar-thumb]:bg-zinc-300 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:hover:bg-zinc-400",
+          "[&::-webkit-scrollbar-thumb]:bg-black [&::-webkit-scrollbar-thumb]:rounded-none",
           // Dark Scrollbar
-          "dark:[&::-webkit-scrollbar-thumb]:bg-zinc-700 dark:[&::-webkit-scrollbar-thumb]:hover:bg-zinc-600",
+          "dark:[&::-webkit-scrollbar-thumb]:bg-white dark:[&::-webkit-scrollbar-thumb]:rounded-none",
         ],
         className
       )}
@@ -981,11 +981,11 @@ export const PromptInputActionMenuContent = ({
   <DropdownMenuContent 
     align="start" 
     className={cn(
-      "rounded-xl",
+      "rounded-none border-2 shadow-[3px_3px_0px_0px_rgba(0,0,0,0.8)]",
       // Light
-      "bg-white border-zinc-200 text-zinc-700",
+      "bg-white border-black text-black",
       // Dark
-      "dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-300", 
+      "dark:bg-zinc-900 dark:border-white dark:text-white", 
       className
     )} 
     {...props} 
@@ -1001,11 +1001,11 @@ export const PromptInputActionMenuItem = ({
 }: PromptInputActionMenuItemProps) => (
   <DropdownMenuItem 
     className={cn(
-      "rounded-lg cursor-pointer",
+      "rounded-none cursor-pointer border-b border-border last:border-b-0",
       // Light
-      "focus:bg-zinc-100 focus:text-zinc-900",
+      "focus:bg-yellow-100 focus:text-black",
       // Dark
-      "dark:focus:bg-zinc-800 dark:focus:text-white",
+      "dark:focus:bg-yellow-900 dark:focus:text-black",
       className
     )} 
     {...props} 
@@ -1038,14 +1038,14 @@ export const PromptInputSubmit = ({
     <InputGroupButton
       aria-label="Submit"
       className={cn(
-        "rounded-full transition-all duration-200 shadow-sm", 
-        // Light: Dark button (zinc-900)
-        "bg-zinc-900 text-white hover:bg-zinc-800",
-        "disabled:bg-zinc-100 disabled:text-zinc-300 disabled:opacity-100 disabled:cursor-not-allowed",
+        "rounded-none transition-all border-2 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]", 
+        // Light: Dark button
+        "bg-black text-white hover:bg-gray-800 border-black",
+        "disabled:bg-gray-300 disabled:text-gray-500 disabled:opacity-100 disabled:cursor-not-allowed",
         
         // Dark: White button
-        "dark:bg-white dark:text-black dark:hover:bg-zinc-200",
-        "dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600",
+        "dark:bg-white dark:text-black dark:hover:bg-gray-200 dark:border-white",
+        "dark:disabled:bg-gray-800 dark:disabled:text-gray-600",
         className
       )}
       size={size}

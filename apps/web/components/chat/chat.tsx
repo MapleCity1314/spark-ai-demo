@@ -152,7 +152,7 @@ export function Chat({
 
   const inputContainerClass = cn(
     "relative w-full max-w-2xl",
-    "rounded-[32px] bg-muted/30 p-1.5 backdrop-blur-md",
+    "bg-muted/30 p-1.5 backdrop-blur-md",
     "border border-black/5 dark:border-white/5",
     "shadow-sm transition-all duration-300 ease-out",
     "hover:bg-muted/50 hover:shadow-md",

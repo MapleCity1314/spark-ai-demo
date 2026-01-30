@@ -18,7 +18,14 @@ def _utc_now() -> str:
 def _get_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute(
-        \"\"\"\n        CREATE TABLE IF NOT EXISTS profiles (\n            profile_id TEXT PRIMARY KEY,\n            created_at TEXT NOT NULL,\n            payload_json TEXT NOT NULL\n        )\n        \"\"\"\n    )
+        """
+        CREATE TABLE IF NOT EXISTS profiles (
+            profile_id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            payload_json TEXT NOT NULL
+        )
+        """
+    )
     return conn
 
 
@@ -27,12 +34,12 @@ _CONN = _get_conn()
 
 def create_profile(payload: Dict[str, Any]) -> Dict[str, Any]:
     profile_id = str(uuid.uuid4())
-    record = {\"profile_id\": profile_id, \"created_at\": _utc_now(), **payload}
+    record = {"profile_id": profile_id, "created_at": _utc_now(), **payload}
     payload_json = json.dumps(record, ensure_ascii=False)
     with _LOCK:
         _CONN.execute(
-            \"INSERT INTO profiles (profile_id, created_at, payload_json) VALUES (?, ?, ?)\",
-            (profile_id, record[\"created_at\"], payload_json),
+            "INSERT INTO profiles (profile_id, created_at, payload_json) VALUES (?, ?, ?)",
+            (profile_id, record["created_at"], payload_json),
         )
         _CONN.commit()
     return record
@@ -41,7 +48,7 @@ def create_profile(payload: Dict[str, Any]) -> Dict[str, Any]:
 def get_profile(profile_id: str) -> Optional[Dict[str, Any]]:
     with _LOCK:
         cursor = _CONN.execute(
-            \"SELECT payload_json FROM profiles WHERE profile_id = ?\",
+            "SELECT payload_json FROM profiles WHERE profile_id = ?",
             (profile_id,),
         )
         row = cursor.fetchone()

@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 
-from spoonos_server.api.routes import agent, health, profile
+from spoonos_server.api.routes import agent, health, openai, profile
 
 
 app = FastAPI(title="SpoonOS API")
 app.include_router(health.router)
 app.include_router(agent.router)
+app.include_router(openai.router)
 app.include_router(profile.router)

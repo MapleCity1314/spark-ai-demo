@@ -15,12 +15,16 @@ if BaseTool:
             tool: Any,
             emit: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
         ) -> None:
-            super().__init__()
+            name = getattr(tool, "name", tool.__class__.__name__)
+            description = getattr(tool, "description", "") or ""
+            parameters = getattr(tool, "parameters", {}) or {}
+            super().__init__(
+                name=name,
+                description=description,
+                parameters=parameters,
+            )
             self._tool = tool
             self._emit = emit
-            self.name = getattr(tool, "name", tool.__class__.__name__)
-            self.description = getattr(tool, "description", "") or ""
-            self.parameters = getattr(tool, "parameters", {}) or {}
 
         def set_emit(
             self, emit: Optional[Callable[[Dict[str, Any]], Awaitable[None]]]

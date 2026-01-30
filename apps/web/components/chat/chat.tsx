@@ -155,7 +155,6 @@ export function Chat({
   void addToolOutput;
   void welcomeTitle;
 
-  // 极简风格的 Input 容器
   const inputContainerClass = cn(
     "relative w-full max-w-2xl",
     "rounded-[32px] bg-muted/30 p-1.5 backdrop-blur-md",
@@ -168,7 +167,9 @@ export function Chat({
     <div className={cn("relative flex min-h-[100dvh] flex-col", className)}>
       {hasMessages ? (
         <>
-          <ChatRender className="pb-40" messages={messages} />
+          <div className="mx-auto w-full max-w-2xl px-4">
+            <ChatRender className="pb-40" messages={messages} />
+          </div>
 
           <div className="fixed inset-x-0 bottom-0 z-10">
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/90 to-transparent" />

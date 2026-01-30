@@ -161,7 +161,9 @@ async def stream_agent_events(
                 if run_task.done():
                     break
 
-        await run_task
+        result = await run_task
+        if result:
+            buffer = str(result)
         if buffer:
             yield _build_text_message(message_id, buffer, "done")
     finally:

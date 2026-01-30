@@ -104,6 +104,7 @@ export function Chat({
   const hasMessages = messages.length > 0;
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
   const [pendingQuestionId, setPendingQuestionId] = useState<string | null>(null);
+  const lastAnswerKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (query && !hasAppendedQueryRef.current) {
@@ -137,6 +138,7 @@ export function Chat({
     if (payload.status === "question" && payload.question?.question_id) {
       setActiveQuestionId(payload.question.question_id);
       setPendingQuestionId(null);
+      lastAnswerKeyRef.current = null;
     } else {
       setActiveQuestionId(null);
     }
@@ -170,10 +172,20 @@ export function Chat({
               messages={messages}
               activeQuestionId={activeQuestionId}
               onQuestionSelect={({ questionId, optionId, optionText }) => {
-                if (!questionId || pendingQuestionId === questionId) {
+                if (status !== "ready") {
                   return;
                 }
+                const answerKey = `${questionId}:${optionId}`;
+                if (
+                  !questionId ||
+                  pendingQuestionId === questionId ||
+                  lastAnswerKeyRef.current === answerKey
+                ) {
+                  return;
+                }
+                lastAnswerKeyRef.current = answerKey;
                 setPendingQuestionId(questionId);
+                setActiveQuestionId(null);
                 const sessionId = getOrCreateSessionId();
                   const prompt = [
                     "问卷作答：",

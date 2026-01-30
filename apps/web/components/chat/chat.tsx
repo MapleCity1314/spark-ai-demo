@@ -24,7 +24,7 @@ export function Chat({
   webSearchEnabled,
   onWebSearchToggle,
   welcomeTitle = "欢迎回来",
-  welcomeSubtitle = "告诉我你想做什么",
+  welcomeSubtitle = "今天想探索什么？",
   className,
 }: ChatProps) {
   const router = useRouter();
@@ -67,43 +67,49 @@ export function Chat({
   void resumeStream;
   void addToolOutput;
 
+  // 极简风格的 Input 容器
+  const inputContainerClass = cn(
+    "relative w-full max-w-2xl",
+    "rounded-[32px] bg-muted/30 p-1.5 backdrop-blur-md", 
+    "border border-black/5 dark:border-white/5",
+    "shadow-sm transition-all duration-300 ease-out",
+    "hover:bg-muted/50 hover:shadow-md"
+  );
+
   return (
     <div className={cn("relative flex min-h-[100dvh] flex-col", className)}>
       {hasMessages ? (
         <>
-          <ChatRender className="pb-32" messages={messages} />
+          <ChatRender className="pb-40" messages={messages} />
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0">
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/70 to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background/95 to-transparent" />
-
-            <div className="pointer-events-none relative flex w-full justify-center px-4 pb-6">
-              <div className="pointer-events-auto w-full max-w-3xl">
-                <div className="rounded-2xl border bg-background/80 p-2 shadow-2xl backdrop-blur">
-                  <ChatInput
-                    messagesLength={messages.length}
-                    onSubmit={sendMessage}
-                    onStop={stop}
-                    onWebSearchToggle={onWebSearchToggle}
-                    showWelcome={false}
-                    status={status}
-                    webSearchEnabled={webSearchEnabled}
-                  />
-                </div>
+          <div className="fixed inset-x-0 bottom-0 z-10">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/90 to-transparent" />
+            
+            <div className="relative flex w-full justify-center px-4 pb-6">
+              <div className={cn(inputContainerClass, "bg-background/80 shadow-lg")}>
+                <ChatInput
+                  messagesLength={messages.length}
+                  onSubmit={sendMessage}
+                  onStop={stop}
+                  onWebSearchToggle={onWebSearchToggle}
+                  showWelcome={false}
+                  status={status}
+                  webSearchEnabled={webSearchEnabled}
+                />
               </div>
             </div>
           </div>
         </>
       ) : (
-        <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-6 px-4">
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">{welcomeTitle}</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+        <div className="flex min-h-[100dvh] flex-col items-center justify-center px-4 pb-20 pt-10">
+          <div className="mb-10 flex flex-col items-center text-center">
+            <h1 className="text-3xl font-medium tracking-tight text-foreground sm:text-4xl animate-in fade-in slide-in-from-bottom-3 duration-700">
               {welcomeSubtitle}
             </h1>
           </div>
-          <div className="w-full max-w-2xl">
-            <div className="rounded-2xl border bg-background/80 p-2 shadow-2xl backdrop-blur">
+
+          <div className="w-full max-w-2xl animate-in fade-in slide-in-from-bottom-6 duration-700 delay-150">
+            <div className={inputContainerClass}>
               <ChatInput
                 messagesLength={0}
                 onSubmit={sendMessage}
@@ -113,6 +119,11 @@ export function Chat({
                 status={status}
                 webSearchEnabled={webSearchEnabled}
               />
+            </div>
+
+            <div className="mt-4 flex justify-center gap-4 text-xs text-muted-foreground/40 opacity-0 animate-in fade-in duration-1000 delay-500">
+              <span>Enter 发送</span>
+              <span>Shift + Enter 换行</span>
             </div>
           </div>
         </div>

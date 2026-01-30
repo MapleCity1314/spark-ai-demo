@@ -178,9 +178,9 @@ async def chat_completions(request: OpenAIChatCompletionRequest):
                             else {"input": input_payload}
                         )
                         delta = {
-                            "role": "assistant" if not sent_role else None,
                             "tool_calls": [
                                 {
+                                    "index": 0,
                                     "id": tool_call_id,
                                     "type": "function",
                                     "function": {
@@ -193,6 +193,7 @@ async def chat_completions(request: OpenAIChatCompletionRequest):
                             ],
                         }
                         if not sent_role:
+                            delta["role"] = "assistant"
                             sent_role = True
                         chunk = {
                             "id": completion_id,
@@ -226,11 +227,10 @@ async def chat_completions(request: OpenAIChatCompletionRequest):
                         if isinstance(output, str)
                         else json.dumps(output, ensure_ascii=False)
                     )
-                    delta = {
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "content": content,
-                    }
+                    delta = {"content": content}
+                    if not sent_role:
+                        delta["role"] = "assistant"
+                        sent_role = True
                     chunk = {
                         "id": completion_id,
                         "object": "chat.completion.chunk",

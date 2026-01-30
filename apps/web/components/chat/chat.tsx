@@ -3,7 +3,7 @@
 import { UIMessage, DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { cn, fetchWithErrorHandlers } from "@/lib/utils";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChatInput } from "./chat-input";
 import { ChatRender } from "./chat-render";
@@ -70,7 +70,7 @@ export function Chat({
       api: "/api/chat",
       body: () => ({
         profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
-        toolkits: ["profile"],
+        toolkits: webSearchEnabled ? ["profile", "web"] : ["profile"],
       }),
       fetch: fetchWithErrorHandlers,
     }),
@@ -82,6 +82,42 @@ export function Chat({
   const query = searchParams.get("query") ?? searchParams.get("q") ?? undefined;
   const chatId = params?.id;
   const hasMessages = messages.length > 0;
+  const [questionnaireState, setQuestionnaireState] = useState<{
+    toolCallId: string;
+    title?: string;
+    currentIndex: number;
+    questions: Array<{
+      id: string;
+      question: string;
+      options: Array<{ id: string; text: string }>;
+    }>;
+  } | null>(null);
+  const [questionnaireHistory, setQuestionnaireHistory] = useState<
+    Array<{
+      index: number;
+      total: number;
+      question: string;
+      selectedOption: { id: string; text: string };
+      title?: string;
+    }>
+  >([]);
+
+  const activeQuestionnaire = useMemo(() => {
+    if (!questionnaireState) {
+      return null;
+    }
+    const question = questionnaireState.questions[questionnaireState.currentIndex];
+    if (!question) {
+      return null;
+    }
+    return {
+      title: questionnaireState.title,
+      index: questionnaireState.currentIndex + 1,
+      total: questionnaireState.questions.length,
+      question: question.question,
+      options: question.options,
+    };
+  }, [questionnaireState]);
 
   useEffect(() => {
     if (query && !hasAppendedQueryRef.current) {
@@ -92,6 +128,58 @@ export function Chat({
       }
     }
   }, [query, sendMessage, chatId, router]);
+
+  useEffect(() => {
+    const toolParts = messages
+      .flatMap((message) => message.parts)
+      .filter(
+        (part) =>
+          part.type === "tool-mbti_trader_questionnaire" &&
+          (part as { output?: unknown }).output,
+      )
+      .map((part) => part as { toolCallId?: string; output?: unknown });
+
+    const latest = toolParts[toolParts.length - 1];
+    if (!latest || typeof latest.output !== "object" || latest.output === null) {
+      return;
+    }
+
+    const payload = latest.output as {
+      title?: string;
+      current_index?: number;
+      questions?: Array<{
+        id: string;
+        question: string;
+        options?: Array<{ id: string; text: string }>;
+      }>;
+    };
+
+    if (!payload.questions || payload.questions.length === 0) {
+      return;
+    }
+
+    const toolCallId = latest.toolCallId ?? "questionnaire";
+    const shouldReset =
+      !questionnaireState || questionnaireState.toolCallId !== toolCallId;
+    if (shouldReset) {
+      setQuestionnaireHistory([]);
+    }
+    setQuestionnaireState((prev) => {
+      if (prev?.toolCallId === toolCallId) {
+        return prev;
+      }
+      return {
+        toolCallId,
+        title: payload.title,
+        currentIndex: payload.current_index ?? 0,
+        questions: payload.questions.map((question) => ({
+          id: question.id,
+          question: question.question,
+          options: question.options ?? [],
+        })),
+      };
+    });
+  }, [messages]);
 
   useEffect(() => {
     const profileOutputs = messages.flatMap((message) =>
@@ -168,7 +256,61 @@ export function Chat({
       {hasMessages ? (
         <>
           <div className="mx-auto w-full max-w-2xl px-4">
-            <ChatRender className="pb-40" messages={messages} />
+            <ChatRender
+              className="pb-40"
+              messages={messages}
+              questionnaire={activeQuestionnaire}
+              questionnaireHistory={questionnaireHistory}
+              onQuestionSelect={(optionText) => {
+                if (!questionnaireState) {
+                  return;
+                }
+                const currentQuestion =
+                  questionnaireState.questions[questionnaireState.currentIndex];
+                const matchedOption =
+                  currentQuestion.options.find(
+                    (option) => option.text === optionText,
+                  ) ?? { id: "", text: optionText };
+                const historyNext = [
+                  ...questionnaireHistory,
+                  {
+                    index: questionnaireState.currentIndex + 1,
+                    total: questionnaireState.questions.length,
+                    question: currentQuestion.question,
+                    selectedOption: matchedOption,
+                    title: questionnaireState.title,
+                  },
+                ];
+
+                setQuestionnaireHistory(historyNext);
+
+                sendMessage({ text: optionText, files: [] });
+                setQuestionnaireState((prev) => {
+                  if (!prev) {
+                    return prev;
+                  }
+                  const nextIndex = prev.currentIndex + 1;
+                  if (nextIndex >= prev.questions.length) {
+                    const summary = historyNext.map((item) => ({
+                      id: `q${item.index}`,
+                      question: item.question,
+                      choice: {
+                        id: item.selectedOption.id,
+                        text: item.selectedOption.text,
+                      },
+                    }));
+                    sendMessage({
+                      text: `问卷完成。请根据以下结构化答案调用 mbti_profile_create 生成画像：${JSON.stringify(
+                        summary,
+                      )}`,
+                      files: [],
+                    });
+                    return null;
+                  }
+                  return { ...prev, currentIndex: nextIndex };
+                });
+              }}
+            />
           </div>
 
           <div className="fixed inset-x-0 bottom-0 z-10">

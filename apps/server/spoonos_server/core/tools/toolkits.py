@@ -36,6 +36,13 @@ try:
 except Exception:  # pragma: no cover - optional toolkit
     MBTIProfileCreateTool = None
 
+try:
+    from spoonos_server.core.tools.mbti_questionnaire_tools import (
+        MBTITraderQuestionnaireTool,
+    )
+except Exception:  # pragma: no cover - optional toolkit
+    MBTITraderQuestionnaireTool = None
+
 
 TOOLKIT_REGISTRY: Dict[str, Any] = {
     "web": lambda: [WebScraperTool()] if WebScraperTool else [],
@@ -49,7 +56,11 @@ TOOLKIT_REGISTRY: Dict[str, Any] = {
         for tool in (EchoTool, JsonRenderTool, DelayTool, ErrorTool)
         if tool
     ],
-    "profile": lambda: [MBTIProfileCreateTool()] if MBTIProfileCreateTool else [],
+    "profile": lambda: [
+        tool()
+        for tool in (MBTIProfileCreateTool, MBTITraderQuestionnaireTool)
+        if tool
+    ],
 }
 
 

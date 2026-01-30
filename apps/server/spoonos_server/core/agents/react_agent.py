@@ -7,6 +7,7 @@ from spoon_ai.chat import ChatBot
 from spoon_ai.tools import ToolManager
 
 from spoonos_server.core.config import AppConfig
+from spoonos_server.core.prompt import system_prompt
 from spoonos_server.core.mcp.loader import load_mcp_tools
 from spoonos_server.core.schemas import SubAgentSpec
 from spoonos_server.core.tools.toolkits import (
@@ -18,12 +19,7 @@ from spoonos_server.core.tools.tool_call_wrapper import wrap_tools_for_calls
 from spoonos_server.core.agents.sub_agents import SubAgentTool, create_subagents
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "You are a SpoonOS ReAct agent. Be concise, structured, and tool-aware. "
-    "Use tools when they can improve accuracy. If a tool is needed, call it. "
-    "When users ask about available tools, MCP servers, or skills, list the actual "
-    "tools you have access to and briefly describe them. Do not invent capabilities."
-)
+DEFAULT_SYSTEM_PROMPT = system_prompt
 
 
 def _build_tool_list(tool_manager: ToolManager) -> str:

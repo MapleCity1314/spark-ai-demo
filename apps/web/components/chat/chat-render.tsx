@@ -21,6 +21,21 @@ interface ChatRenderProps {
   className?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  questionnaire?: {
+    title?: string;
+    index?: number;
+    total?: number;
+    question: string;
+    options: Array<{ id: string; text: string }>;
+  } | null;
+  questionnaireHistory?: Array<{
+    title?: string;
+    index: number;
+    total: number;
+    question: string;
+    selectedOption: { id: string; text: string };
+  }>;
+  onQuestionSelect?: (optionText: string) => void;
 }
 
 type AttachmentPart = FileUIPart | SourceDocumentUIPart;
@@ -38,6 +53,9 @@ export function ChatRender({
   className,
   emptyTitle,
   emptyDescription,
+  questionnaire,
+  questionnaireHistory,
+  onQuestionSelect,
 }: ChatRenderProps) {
   return (
     <Conversation className={cn("relative flex-1", className)}>
@@ -82,10 +100,57 @@ export function ChatRender({
                       {part.text}
                     </MessageResponse>
                   ))}
+
                 </MessageContent>
               </Message>
             );
           })
+        )}
+        {questionnaireHistory &&
+          questionnaireHistory.map((item, index) => (
+            <div
+              key={`questionnaire-history-${index}`}
+              className="mt-3 rounded-2xl border border-border bg-muted/30 px-4 py-3"
+            >
+              {item.title && (
+                <div className="text-xs text-muted-foreground">
+                  {item.title} · 第 {item.index}/{item.total} 题
+                </div>
+              )}
+              <div className="mt-1 text-sm font-medium text-foreground">
+                {item.question}
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground">
+                已选：{item.selectedOption.id}. {item.selectedOption.text}
+              </div>
+            </div>
+          ))}
+        {questionnaire && (
+          <div className="mt-3 rounded-2xl border border-border bg-background/90 px-4 py-3 shadow-sm">
+            {questionnaire.title && (
+              <div className="text-xs text-muted-foreground">
+                {questionnaire.title}
+                {typeof questionnaire.index === "number" &&
+                  typeof questionnaire.total === "number" &&
+                  ` · 第 ${questionnaire.index}/${questionnaire.total} 题`}
+              </div>
+            )}
+            <div className="mt-1 text-sm font-medium text-foreground">
+              {questionnaire.question}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              {questionnaire.options.map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className="rounded-xl border border-border bg-muted/60 px-3 py-2 text-left text-sm text-foreground transition hover:bg-muted"
+                  onClick={() => onQuestionSelect?.(option.text)}
+                >
+                  {option.id}. {option.text}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </ConversationContent>
       <ConversationScrollButton />

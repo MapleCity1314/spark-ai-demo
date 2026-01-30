@@ -163,12 +163,24 @@ export const InlineCitationCarouselIndex = ({
       return;
     }
 
-    setCount(api.scrollSnapList().length);
-    setCurrent(api.selectedScrollSnap() + 1);
+    const scheduleUpdate = () => {
+      const update = () => {
+        setCount(api.scrollSnapList().length);
+        setCurrent(api.selectedScrollSnap() + 1);
+      };
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(update);
+      } else {
+        setTimeout(update, 0);
+      }
+    };
 
-    api.on("select", () => {
-      setCurrent(api.selectedScrollSnap() + 1);
-    });
+    scheduleUpdate();
+    api.on("select", scheduleUpdate);
+
+    return () => {
+      api.off("select", scheduleUpdate);
+    };
   }, [api]);
 
   return (

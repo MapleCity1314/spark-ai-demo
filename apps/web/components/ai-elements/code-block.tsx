@@ -205,8 +205,8 @@ export function highlightCode(
 
       const tokenized: TokenizedCode = {
         tokens: result.tokens,
-        fg: result.fg,
-        bg: result.bg,
+        fg: result.fg ?? "inherit",
+        bg: result.bg ?? "transparent",
       };
 
       // Cache the result
@@ -297,6 +297,8 @@ const CodeBlockBody = memo(
     prevProps.className === nextProps.className
 );
 
+CodeBlockBody.displayName = "CodeBlockBody";
+
 export const CodeBlockContainer = ({
   className,
   language,
@@ -382,12 +384,9 @@ export const CodeBlockContent = ({
   );
 
   useEffect(() => {
-    // Reset to raw tokens when code changes (shows current code, not stale tokens)
-    setTokenized(highlightCode(code, language) ?? rawTokens);
-
     // Subscribe to async highlighting result
     highlightCode(code, language, setTokenized);
-  }, [code, language, rawTokens]);
+  }, [code, language]);
 
   return (
     <div className="relative overflow-auto">
@@ -403,18 +402,26 @@ export const CodeBlock = ({
   className,
   children,
   ...props
-}: CodeBlockProps) => (
-  <CodeBlockContext.Provider value={{ code }}>
-    <CodeBlockContainer className={className} language={language} {...props}>
-      {children}
-      <CodeBlockContent
-        code={code}
-        language={language}
-        showLineNumbers={showLineNumbers}
-      />
-    </CodeBlockContainer>
-  </CodeBlockContext.Provider>
-);
+}: CodeBlockProps) => {
+  const contentKey = useMemo(
+    () => getTokensCacheKey(code, language),
+    [code, language]
+  );
+
+  return (
+    <CodeBlockContext.Provider value={{ code }}>
+      <CodeBlockContainer className={className} language={language} {...props}>
+        {children}
+        <CodeBlockContent
+          key={contentKey}
+          code={code}
+          language={language}
+          showLineNumbers={showLineNumbers}
+        />
+      </CodeBlockContainer>
+    </CodeBlockContext.Provider>
+  );
+};
 
 export type CodeBlockCopyButtonProps = ComponentProps<typeof Button> & {
   onCopy?: () => void;

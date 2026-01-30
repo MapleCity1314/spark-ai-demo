@@ -190,7 +190,9 @@ export function PromptInputProvider({
   }, []);
 
   const attachmentsRef = useRef(attachmentFiles);
-  attachmentsRef.current = attachmentFiles;
+  useEffect(() => {
+    attachmentsRef.current = attachmentFiles;
+  }, [attachmentFiles]);
 
   useEffect(() => {
     return () => {
@@ -284,6 +286,19 @@ export function PromptInputAttachment({
   const isImage = mediaType === "image";
   const attachmentLabel = filename || (isImage ? "Image" : "Attachment");
 
+  const previewImage = isImage ? (
+    <div className="flex max-h-96 w-96 items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-black/40">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        alt={filename || "attachment preview"}
+        className="max-h-full max-w-full object-contain"
+        height={384}
+        src={data.url}
+        width={448}
+      />
+    </div>
+  ) : null;
+
   return (
     <PromptInputHoverCard>
       <HoverCardTrigger asChild>
@@ -302,6 +317,7 @@ export function PromptInputAttachment({
           <div className="relative size-5 shrink-0">
             <div className="absolute inset-0 flex size-5 items-center justify-center overflow-hidden rounded bg-black/5 dark:bg-black/20 transition-opacity group-hover:opacity-0">
               {isImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt={filename || "attachment"}
                   className="size-5 object-cover"
@@ -343,17 +359,7 @@ export function PromptInputAttachment({
       <PromptInputHoverCardContent className="w-auto p-2">
          {/* ... Content ... */}
          <div className="w-auto space-y-3">
-          {isImage && (
-            <div className="flex max-h-96 w-96 items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-black/40">
-              <img
-                alt={filename || "attachment preview"}
-                className="max-h-full max-w-full object-contain"
-                height={384}
-                src={data.url}
-                width={448}
-              />
-            </div>
-          )}
+          {previewImage}
           <div className="flex items-center gap-2.5">
             <div className="min-w-0 flex-1 space-y-1 px-0.5">
               <h4 className="truncate font-semibold text-sm leading-none">
@@ -477,7 +483,9 @@ export const PromptInput = ({
   const [items, setItems] = useState<(FileUIPart & { id: string })[]>([]);
   const files = usingProvider ? controller.attachments.files : items;
   const filesRef = useRef(files);
-  filesRef.current = files;
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   const openFileDialogLocal = useCallback(() => {
     inputRef.current?.click();
@@ -665,7 +673,8 @@ export const PromptInput = ({
     if (!usingProvider) form.reset();
 
     Promise.all(
-      files.map(async ({ id: _id, ...item }) => {
+      files.map(async ({ id, ...item }) => {
+        void id;
         if (item.url && item.url.startsWith("blob:")) {
           const dataUrl = await convertBlobUrlToDataUrl(item.url);
           return { ...item, url: dataUrl ?? item.url };
@@ -763,17 +772,16 @@ export const PromptInputTextarea = ({
   const controller = useOptionalPromptInputController();
   const attachments = usePromptInputAttachments();
   const [isComposing, setIsComposing] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [localValue, setLocalValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const currentValue = controller ? controller.textInput.value : localValue;
 
-  // 检测是否需要展开（超过一行）
-  const checkExpansion = useCallback((value: string) => {
-    // 检查是否有换行符，或者文本长度超过一定阈值
-    const hasLineBreak = value.includes('\n');
-    const isLongText = value.length > 80; // 大约一行的字符数
-    
-    setIsExpanded(hasLineBreak || isLongText);
-  }, []);
+  const isExpanded = useMemo(() => {
+    const value = currentValue ?? "";
+    const hasLineBreak = value.includes("\n");
+    const isLongText = value.length > 80;
+    return hasLineBreak || isLongText;
+  }, [currentValue]);
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
     if (e.key === "Enter") {
@@ -810,7 +818,7 @@ export const PromptInputTextarea = ({
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.currentTarget.value;
-    checkExpansion(value);
+    setLocalValue(value);
     if (controller) {
       controller.textInput.setInput(value);
     }
@@ -823,12 +831,6 @@ export const PromptInputTextarea = ({
         onChange: handleChange,
       }
     : { onChange: handleChange };
-
-  // 当值变化时检查是否需要展开
-  useEffect(() => {
-    const value = controller?.textInput.value || '';
-    checkExpansion(value);
-  }, [controller?.textInput.value, checkExpansion]);
 
   return (
     <InputGroupTextarea
@@ -1051,10 +1053,14 @@ interface SpeechRecognition extends EventTarget {
   lang: string;
   start(): void;
   stop(): void;
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null;
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null;
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null;
+  onstart: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onend: ((this: SpeechRecognition, ev: Event) => void) | null;
+  onresult: (
+    (this: SpeechRecognition, ev: SpeechRecognitionEvent) => void
+  ) | null;
+  onerror: (
+    (this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => void
+  ) | null;
 }
 
 interface SpeechRecognitionEvent extends Event {
@@ -1139,7 +1145,11 @@ export const PromptInputSpeechButton = ({
         setIsListening(false);
       };
       recognitionRef.current = speechRecognition;
-      setRecognition(speechRecognition);
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(() => setRecognition(speechRecognition));
+      } else {
+        setTimeout(() => setRecognition(speechRecognition), 0);
+      }
     }
     return () => {
       if (recognitionRef.current) recognitionRef.current.stop();

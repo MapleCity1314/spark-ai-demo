@@ -116,6 +116,7 @@ export const FileTreeFolder = ({
       <Collapsible onOpenChange={() => togglePath(path)} open={isExpanded}>
         <div
           className={cn("", className)}
+          aria-selected={isSelected}
           role="treeitem"
           tabIndex={0}
           {...props}
@@ -196,6 +197,7 @@ export const FileTreeFile = ({
           }
         }}
         role="treeitem"
+        aria-selected={isSelected}
         tabIndex={0}
         {...props}
       >

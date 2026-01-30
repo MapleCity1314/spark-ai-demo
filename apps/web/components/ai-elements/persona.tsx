@@ -158,6 +158,8 @@ const PersonaWithModel = memo(
   }
 );
 
+PersonaWithModel.displayName = "PersonaWithModel";
+
 interface PersonaWithoutModelProps {
   children: ReactNode;
 }
@@ -165,6 +167,8 @@ interface PersonaWithoutModelProps {
 const PersonaWithoutModel = memo(
   ({ children }: PersonaWithoutModelProps) => children
 );
+
+PersonaWithoutModel.displayName = "PersonaWithoutModel";
 
 export const Persona: FC<PersonaProps> = memo(
   ({
@@ -246,15 +250,19 @@ export const Persona: FC<PersonaProps> = memo(
 
     useEffect(() => {
       if (listeningInput) {
+        // eslint-disable-next-line react-hooks/immutability
         listeningInput.value = state === "listening";
       }
       if (thinkingInput) {
+        // eslint-disable-next-line react-hooks/immutability
         thinkingInput.value = state === "thinking";
       }
       if (speakingInput) {
+        // eslint-disable-next-line react-hooks/immutability
         speakingInput.value = state === "speaking";
       }
       if (asleepInput) {
+        // eslint-disable-next-line react-hooks/immutability
         asleepInput.value = state === "asleep";
       }
     }, [state, listeningInput, thinkingInput, speakingInput, asleepInput]);
@@ -268,3 +276,5 @@ export const Persona: FC<PersonaProps> = memo(
     );
   }
 );
+
+Persona.displayName = "Persona";

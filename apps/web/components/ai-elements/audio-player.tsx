@@ -34,6 +34,7 @@ export const AudioPlayer = ({
 }: AudioPlayerProps) => (
   <MediaController
     audio
+    className={className}
     data-slot="audio-player"
     style={
       {

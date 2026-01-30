@@ -61,6 +61,7 @@ async def stream_agent(request: StreamRequest) -> StreamingResponse:
     agent = create_react_agent(
         config=config,
         system_prompt=request.system_prompt,
+        profile_prompt=request.profile_prompt,
         provider=request.provider,
         model=request.model,
         toolkits=request.toolkits,

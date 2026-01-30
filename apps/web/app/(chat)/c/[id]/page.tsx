@@ -11,13 +11,13 @@ const Loading = () => (
   </div>
 );
 
-const getBaseUrl = () => {
+const getBaseUrl = async () => {
   const envBaseUrl = process.env.NEXT_PUBLIC_SITE_URL;
   if (envBaseUrl) {
     return envBaseUrl;
   }
 
-  const requestHeaders = headers();
+  const requestHeaders = await headers();
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
   const host =
     requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
@@ -27,7 +27,7 @@ const getBaseUrl = () => {
 
 const getChatById = async (id: string): Promise<UIMessage[]> => {
   try {
-    const baseUrl = getBaseUrl();
+    const baseUrl = await getBaseUrl();
     const response = await fetch(`${baseUrl}/api/chat/${id}`, {
       cache: "no-store",
     });

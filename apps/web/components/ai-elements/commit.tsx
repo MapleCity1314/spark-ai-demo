@@ -157,12 +157,21 @@ export const CommitTimestamp = ({
   children,
   ...props
 }: CommitTimestampProps) => {
-  const formatted = new Intl.RelativeTimeFormat("en", {
-    numeric: "auto",
-  }).format(
-    Math.round((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
-    "day"
-  );
+  const [relativeLabel, setRelativeLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    const formatted = new Intl.RelativeTimeFormat("en", {
+      numeric: "auto",
+    }).format(
+      Math.round((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+      "day"
+    );
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(() => setRelativeLabel(formatted));
+    } else {
+      setTimeout(() => setRelativeLabel(formatted), 0);
+    }
+  }, [date]);
 
   return (
     <time
@@ -170,7 +179,7 @@ export const CommitTimestamp = ({
       dateTime={date.toISOString()}
       {...props}
     >
-      {children ?? formatted}
+      {children ?? relativeLabel ?? date.toLocaleDateString()}
     </time>
   );
 };

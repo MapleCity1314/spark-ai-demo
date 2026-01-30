@@ -24,6 +24,7 @@ class StreamRequest(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
     system_prompt: Optional[str] = None
+    profile_prompt: Optional[str] = None
     toolkits: Optional[List[str]] = None
     mcp_enabled: Optional[bool] = None
     sub_agents: Optional[List[SubAgentSpec]] = None

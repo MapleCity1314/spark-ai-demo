@@ -1,4 +1,5 @@
 __pycache__/
 spoon-agent/*
 .venv312/*
+.venv/*
 .env

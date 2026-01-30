@@ -34,6 +34,7 @@ def _build_tool_list(tool_manager: ToolManager) -> str:
 def create_react_agent(
     config: AppConfig,
     system_prompt: Optional[str],
+    profile_prompt: Optional[str],
     provider: Optional[str],
     model: Optional[str],
     toolkits: Optional[List[str]],
@@ -60,6 +61,8 @@ def create_react_agent(
     tool_list = _build_tool_list(tool_manager)
 
     prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+    if profile_prompt:
+        prompt = f"{prompt}\n\nUser profile context:\n{profile_prompt.strip()}"
     prompt = f"{prompt}\n\nAvailable tools:\n{tool_list}"
 
     agent = SpoonReactAI(

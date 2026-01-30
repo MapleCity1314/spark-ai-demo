@@ -68,18 +68,18 @@ export function Chat({
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const { 
-    messages, 
-    setMessages, 
-    sendMessage, 
-    status, 
-    stop, 
-    resumeStream, 
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    stop,
+    resumeStream,
     addToolOutput,
   } = useChat({
     messages: seedMessages,
@@ -103,6 +103,8 @@ export function Chat({
   const chatId = params?.id;
   const hasMessages = messages.length > 0;
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const [pendingQuestionId, setPendingQuestionId] = useState<string | null>(null);
+  const lastAnswerKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (query && !hasAppendedQueryRef.current) {
@@ -135,6 +137,8 @@ export function Chat({
     };
     if (payload.status === "question" && payload.question?.question_id) {
       setActiveQuestionId(payload.question.question_id);
+      setPendingQuestionId(null);
+      lastAnswerKeyRef.current = null;
     } else {
       setActiveQuestionId(null);
     }
@@ -167,11 +171,33 @@ export function Chat({
               className="pb-40"
               messages={messages}
               activeQuestionId={activeQuestionId}
-              onQuestionSelect={(optionText) => {
-                sendMessage({ text: optionText, files: [] });
+              onQuestionSelect={({ questionId, optionId, optionText }) => {
+                if (status !== "ready") {
+                  return;
+                }
+                const answerKey = `${questionId}:${optionId}`;
+                if (
+                  !questionId ||
+                  pendingQuestionId === questionId ||
+                  lastAnswerKeyRef.current === answerKey
+                ) {
+                  return;
+                }
+                lastAnswerKeyRef.current = answerKey;
+                setPendingQuestionId(questionId);
+                setActiveQuestionId(null);
+                const sessionId = getOrCreateSessionId();
+                  const prompt = [
+                    "问卷作答：",
+                    `session_id=${sessionId}`,
+                    `question_id=${questionId}`,
+                    `choice_id=${optionId}`,
+                    `choice_text=${optionText}`,
+                    "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。不要复述参数或输出。",
+                  ].join(", ");
+                sendMessage({ text: prompt, files: [] });
               }}
             />
-            {/* 用于自动滚动到最新消息的引用 */}
             <div ref={messagesEndRef} />
           </div>
 

@@ -83,14 +83,17 @@ def create_react_agent(
         f"\n\nAvailable tools:\n{tool_list}"
     )
 
+    llm_kwargs = {
+        "llm_provider": provider or config.llm.provider,
+        "model_name": model or config.llm.model,
+        "api_key": config.llm.api_key,
+        "base_url": config.llm.base_url,
+        "stream": True,
+    }
+
     agent = SpoonReactAI(
         name="spoon_react_server",
-        llm=ChatBot(
-            llm_provider=provider or config.llm.provider,
-            model_name=model or config.llm.model,
-            api_key=config.llm.api_key,
-            base_url=config.llm.base_url,
-        ),
+        llm=ChatBot(**llm_kwargs),
         tools=tool_manager,
         max_steps=8,
     )
@@ -154,7 +157,27 @@ async def stream_agent_events(
         finally:
             agent.task_done.set()
 
+    async def stream_llm_tokens() -> None:
+        llm = getattr(agent, "llm", None)
+        if not llm or not hasattr(llm, "astream"):
+            return
+        try:
+            async for chunk in llm.astream(
+                messages=[{"role": "user", "content": user_message}],
+                system_msg=getattr(agent, "system_prompt", None),
+            ):
+                delta = getattr(chunk, "delta", None)
+                if delta is None:
+                    delta = getattr(chunk, "content", None)
+                if delta is None:
+                    delta = str(chunk)
+                if delta:
+                    await agent.output_queue.put({"delta": str(delta)})
+        except Exception:
+            return
+
     run_task = asyncio.create_task(run_and_signal())
+    token_task = asyncio.create_task(stream_llm_tokens())
     queue = agent.output_queue
     message_id = str(uuid.uuid4())
     buffer = ""
@@ -182,6 +205,7 @@ async def stream_agent_events(
                     break
 
         result = await run_task
+        token_task.cancel()
         if result:
             buffer = str(result)
         if buffer:

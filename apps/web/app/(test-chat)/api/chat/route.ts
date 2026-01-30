@@ -155,12 +155,19 @@ export async function POST(req: Request) {
           break;
         }
         buffer += decoder.decode(value, { stream: true });
-        while (buffer.includes("\n\n")) {
-          const idx = buffer.indexOf("\n\n");
+        while (true) {
+          const idxNn = buffer.indexOf("\n\n");
+          const idxRn = buffer.indexOf("\r\n\r\n");
+          if (idxNn === -1 && idxRn === -1) {
+            break;
+          }
+          const useRn = idxRn !== -1 && (idxNn === -1 || idxRn < idxNn);
+          const delimiterLength = useRn ? 4 : 2;
+          const idx = useRn ? idxRn : idxNn;
           const chunk = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
+          buffer = buffer.slice(idx + delimiterLength);
 
-          const lines = chunk.split("\n");
+          const lines = chunk.split(/\r?\n/);
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed.startsWith("data:")) {

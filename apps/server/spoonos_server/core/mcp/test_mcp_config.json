@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "servers": [
+    {
+      "name": "test-mcp",
+      "description": "Local test MCP server (no key required).",
+      "command": "python",
+      "args": ["-m", "spoonos_server.core.mcp.test_mcp_server"]
+    }
+  ]
+}

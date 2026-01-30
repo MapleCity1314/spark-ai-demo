@@ -4,6 +4,7 @@
 - Monorepo managed by Turborepo and pnpm. Workspace roots: `apps/*` and `packages/*`.
 - `apps/web`: Next.js 16 app (React 19, Tailwind CSS). UI code lives under `apps/web` (e.g., `app/`, `components/`).
 - `apps/server`: Python FastAPI service (Spoon AI SDK). Entry point: `apps/server/spoonos_server`.
+- Web chat uses a custom SSE transport in `apps/web/lib/spoon-sse-chat-transport.ts` to convert Spoon agent SSE into UI message chunks.
 - `packages/eslint-config` and `packages/typescript-config`: shared linting and TS configs.
 
 ## Build, Test, and Development Commands
@@ -37,4 +38,6 @@
 
 ## Configuration & Secrets
 - Server expects `.env` in `apps/server` or repo root with `OPENROUTER_API_KEY`.
+- Frontend connects directly to the server streaming endpoint; set `NEXT_PUBLIC_SPOONOS_API_BASE_URL` if not using `http://localhost:8000`.
+- CORS is enabled in the server; set `SPOONOS_CORS_ORIGINS` to a comma-separated list (default `*`).
 - Node >= 18 and pnpm 9 are required (see `package.json`).

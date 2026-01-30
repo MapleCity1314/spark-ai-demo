@@ -12,6 +12,8 @@ load_dotenv()
 class LLMConfig(BaseModel):
     provider: str = "openrouter"
     model: str = "openai/gpt-5.1"
+    api_key: Optional[str] = ""
+    base_url: Optional[str] = ""
 
 
 class MCPServerConfig(BaseModel):
@@ -67,6 +69,9 @@ def _load_mcp_from_path(path_str: str) -> Optional[dict]:
 def load_config() -> AppConfig:
     provider = os.getenv("SPOON_LLM_PROVIDER", "openrouter")
     model = os.getenv("SPOON_LLM_MODEL", "openai/gpt-5.1")
+    api_key = os.getenv("SPOON_LLM_API_KEY", "")
+    base_url = os.getenv("SPOON_LLM_BASE_URL", "")
+    
     default_toolkits: List[str] = ["profile", "web"]
     mcp_raw: dict = {}
 
@@ -74,7 +79,7 @@ def load_config() -> AppConfig:
     mcp_servers = mcp_raw.get("servers", []) if isinstance(mcp_raw, dict) else []
 
     return AppConfig(
-        llm=LLMConfig(provider=provider, model=model),
+        llm=LLMConfig(provider=provider, model=model, api_key=api_key, base_url=base_url),
         toolkits=ToolkitConfig(default_toolkits=default_toolkits),
         mcp=MCPConfig(enabled=mcp_enabled, servers=mcp_servers),
     )

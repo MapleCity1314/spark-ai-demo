@@ -3,10 +3,12 @@ import os
 import sqlite3
 import threading
 import uuid
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-DB_PATH = os.getenv("SPOONOS_PROFILE_DB", "/tmp/spoonos_profiles.sqlite3")
+TEMP_DIR = tempfile.gettempdir()
+DB_PATH = os.getenv("SPOONOS_PROFILE_DB", os.path.join(TEMP_DIR, "spoonos_profiles.sqlite3"))
 
 _LOCK = threading.Lock()
 
@@ -16,6 +18,7 @@ def _utc_now() -> str:
 
 
 def _get_conn() -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute(
         """

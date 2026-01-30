@@ -21,6 +21,12 @@ interface ChatRenderProps {
   className?: string;
   emptyTitle?: string;
   emptyDescription?: string;
+  questionnaire?: {
+    title?: string;
+    question: string;
+    options: Array<{ id: string; text: string }>;
+  } | null;
+  onQuestionSelect?: (optionText: string) => void;
 }
 
 type AttachmentPart = FileUIPart | SourceDocumentUIPart;
@@ -38,6 +44,8 @@ export function ChatRender({
   className,
   emptyTitle,
   emptyDescription,
+  questionnaire,
+  onQuestionSelect,
 }: ChatRenderProps) {
   return (
     <Conversation className={cn("relative flex-1", className)}>
@@ -82,12 +90,39 @@ export function ChatRender({
                       {part.text}
                     </MessageResponse>
                   ))}
+
                 </MessageContent>
               </Message>
             );
           })
         )}
       </ConversationContent>
+      {questionnaire && (
+        <div className="sticky bottom-6 mt-6 flex justify-center px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-background/90 px-4 py-3 shadow-sm backdrop-blur">
+            {questionnaire.title && (
+              <div className="text-xs text-muted-foreground">
+                {questionnaire.title}
+              </div>
+            )}
+            <div className="mt-1 text-sm font-medium text-foreground">
+              {questionnaire.question}
+            </div>
+            <div className="mt-3 flex flex-col gap-2">
+              {questionnaire.options.map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className="rounded-xl border border-border bg-muted/60 px-3 py-2 text-left text-sm text-foreground transition hover:bg-muted"
+                  onClick={() => onQuestionSelect?.(option.text)}
+                >
+                  {option.id}. {option.text}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <ConversationScrollButton />
     </Conversation>
   );

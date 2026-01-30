@@ -13,6 +13,7 @@ the request explicitly enables them.
 - `web`: Web scraping tools (requires `spoon_toolkits.web`)
 - `neo`: Neo blockchain tools (requires `spoon_toolkits.crypto.neo`)
 - `profile`: MBTI profile tools (requires `spoonos_server.core.tools.profile_tools`)
+- `mbti_trader_questionnaire`: MBTI 量化交易者问卷工具（通过 `profile` toolkit 注入）
 - `test`: Demo tools (`EchoTool`, `DelayTool`, `ErrorTool`, `JsonRenderTool`)
 
 ### Enable toolkits from the UI (AI SDK)

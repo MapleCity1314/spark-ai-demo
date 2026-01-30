@@ -92,6 +92,15 @@ export function Chat({
       options: Array<{ id: string; text: string }>;
     }>;
   } | null>(null);
+  const [questionnaireHistory, setQuestionnaireHistory] = useState<
+    Array<{
+      index: number;
+      total: number;
+      question: string;
+      selectedOption: { id: string; text: string };
+      title?: string;
+    }>
+  >([]);
 
   const activeQuestionnaire = useMemo(() => {
     if (!questionnaireState) {
@@ -103,6 +112,8 @@ export function Chat({
     }
     return {
       title: questionnaireState.title,
+      index: questionnaireState.currentIndex + 1,
+      total: questionnaireState.questions.length,
       question: question.question,
       options: question.options,
     };
@@ -148,6 +159,11 @@ export function Chat({
     }
 
     const toolCallId = latest.toolCallId ?? "questionnaire";
+    const shouldReset =
+      !questionnaireState || questionnaireState.toolCallId !== toolCallId;
+    if (shouldReset) {
+      setQuestionnaireHistory([]);
+    }
     setQuestionnaireState((prev) => {
       if (prev?.toolCallId === toolCallId) {
         return prev;
@@ -244,10 +260,30 @@ export function Chat({
               className="pb-40"
               messages={messages}
               questionnaire={activeQuestionnaire}
+              questionnaireHistory={questionnaireHistory}
               onQuestionSelect={(optionText) => {
                 if (!questionnaireState) {
                   return;
                 }
+                const currentQuestion =
+                  questionnaireState.questions[questionnaireState.currentIndex];
+                const matchedOption =
+                  currentQuestion.options.find(
+                    (option) => option.text === optionText,
+                  ) ?? { id: "", text: optionText };
+                const historyNext = [
+                  ...questionnaireHistory,
+                  {
+                    index: questionnaireState.currentIndex + 1,
+                    total: questionnaireState.questions.length,
+                    question: currentQuestion.question,
+                    selectedOption: matchedOption,
+                    title: questionnaireState.title,
+                  },
+                ];
+
+                setQuestionnaireHistory(historyNext);
+
                 sendMessage({ text: optionText, files: [] });
                 setQuestionnaireState((prev) => {
                   if (!prev) {
@@ -255,6 +291,20 @@ export function Chat({
                   }
                   const nextIndex = prev.currentIndex + 1;
                   if (nextIndex >= prev.questions.length) {
+                    const summary = historyNext.map((item) => ({
+                      id: `q${item.index}`,
+                      question: item.question,
+                      choice: {
+                        id: item.selectedOption.id,
+                        text: item.selectedOption.text,
+                      },
+                    }));
+                    sendMessage({
+                      text: `问卷完成。请根据以下结构化答案调用 mbti_profile_create 生成画像：${JSON.stringify(
+                        summary,
+                      )}`,
+                      files: [],
+                    });
                     return null;
                   }
                   return { ...prev, currentIndex: nextIndex };

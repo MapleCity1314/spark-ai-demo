@@ -73,3 +73,7 @@ def load_toolkits(toolkits: List[str]) -> List[Any]:
         tools.extend(factory())
 
     return tools
+
+
+def available_toolkits() -> List[str]:
+    return sorted(TOOLKIT_REGISTRY.keys())

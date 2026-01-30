@@ -9,14 +9,20 @@ from spoon_ai.tools import ToolManager
 from spoonos_server.core.config import AppConfig
 from spoonos_server.core.mcp.loader import load_mcp_tools
 from spoonos_server.core.schemas import SubAgentSpec
-from spoonos_server.core.tools.toolkits import load_toolkits, resolve_toolkits
+from spoonos_server.core.tools.toolkits import (
+    available_toolkits,
+    load_toolkits,
+    resolve_toolkits,
+)
 from spoonos_server.core.tools.tool_call_wrapper import wrap_tools_for_calls
 from spoonos_server.core.agents.sub_agents import SubAgentTool, create_subagents
 
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a SpoonOS ReAct agent. Be concise, structured, and tool-aware. "
-    "Use tools when they can improve accuracy. If a tool is needed, call it."
+    "Use tools when they can improve accuracy. If a tool is needed, call it. "
+    "When users ask about available tools, MCP servers, or skills, list the actual "
+    "tools you have access to and briefly describe them. Do not invent capabilities."
 )
 
 
@@ -59,11 +65,24 @@ def create_react_agent(
 
     tool_manager = ToolManager(tools)
     tool_list = _build_tool_list(tool_manager)
+    toolkit_list = ", ".join(selected_toolkits) if selected_toolkits else "(none)"
+    available_list = ", ".join(available_toolkits())
+    mcp_status = "enabled" if mcp_enabled else "disabled"
+    mcp_servers = (
+        ", ".join(server.name for server in config.mcp.servers)
+        if config.mcp.servers
+        else "(none)"
+    )
 
     prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     if profile_prompt:
         prompt = f"{prompt}\n\nUser profile context:\n{profile_prompt.strip()}"
-    prompt = f"{prompt}\n\nAvailable tools:\n{tool_list}"
+    prompt = (
+        f"{prompt}\n\nEnabled toolkits: {toolkit_list}"
+        f"\nAvailable toolkits: {available_list}"
+        f"\nMCP status: {mcp_status} (servers: {mcp_servers})"
+        f"\n\nAvailable tools:\n{tool_list}"
+    )
 
     agent = SpoonReactAI(
         name="spoon_react_server",

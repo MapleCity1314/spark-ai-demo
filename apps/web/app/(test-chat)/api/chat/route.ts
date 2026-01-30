@@ -27,6 +27,9 @@ export async function POST(req: Request) {
     max_tokens,
     system,
     providerOptions,
+    toolkits,
+    mcp_enabled,
+    sub_agents,
   } = body as {
     messages: UIMessage[];
     model?: string;
@@ -35,11 +38,30 @@ export async function POST(req: Request) {
     max_tokens?: number;
     system?: string;
     providerOptions?: Record<string, unknown>;
+    toolkits?: string[];
+    mcp_enabled?: boolean;
+    sub_agents?: Array<Record<string, unknown>>;
   };
 
   if (!messages?.length) {
     return new Response("messages required", { status: 400 });
   }
+
+  const spoonosOptions =
+    (providerOptions as Record<string, unknown>)?.spoonos ?? providerOptions ?? {};
+  const mergedProviderOptions =
+    toolkits || mcp_enabled !== undefined || sub_agents
+      ? {
+          spoonos: {
+            ...(spoonosOptions as Record<string, unknown>),
+            toolkits,
+            mcp_enabled,
+            sub_agents,
+          },
+        }
+      : providerOptions
+        ? { spoonos: spoonosOptions }
+        : undefined;
 
   const result = streamText({
     model: provider(model ?? "spoonos"),
@@ -48,13 +70,7 @@ export async function POST(req: Request) {
     temperature,
     topP: top_p,
     maxTokens: max_tokens,
-    providerOptions: providerOptions
-      ? {
-          spoonos:
-            (providerOptions as Record<string, unknown>)?.spoonos ??
-            providerOptions,
-        }
-      : undefined,
+    providerOptions: mergedProviderOptions,
   });
 
   return result.toUIMessageStreamResponse();

@@ -1,6 +1,45 @@
-# Turborepo starter
+# SpoonOS (Turborepo)
 
-This Turborepo starter is maintained by the Turborepo core team.
+SpoonOS monorepo with a Next.js UI and a FastAPI server.
+
+## Toolkits and MCP
+
+By default, `profile` and `web` toolkits are enabled. The server decides whether MCP is enabled
+based on its internal config (no env vars required). Tools are loaded only when
+the request explicitly enables them.
+
+### Available toolkits
+
+- `web`: Web scraping tools (requires `spoon_toolkits.web`)
+- `neo`: Neo blockchain tools (requires `spoon_toolkits.crypto.neo`)
+- `profile`: MBTI profile tools (requires `spoonos_server.core.tools.profile_tools`)
+- `test`: Demo tools (`EchoTool`, `DelayTool`, `ErrorTool`, `JsonRenderTool`)
+
+### Enable toolkits from the UI (AI SDK)
+
+Pass `toolkits` / `mcp_enabled` / `sub_agents` in the request body to override defaults. The API route
+`apps/web/app/(test-chat)/api/chat/route.ts` forwards these into the OpenAI-
+compatible provider options.
+
+Example (React):
+
+```ts
+sendMessage(
+  { text: "Hello" },
+  {
+    body: {
+      toolkits: ["web", "neo"],
+      mcp_enabled: true,
+      sub_agents: [
+        {
+          name: "researcher",
+          system_prompt: "You are a deep research assistant.",
+        },
+      ],
+    },
+  }
+);
+```
 
 ## Using this example
 

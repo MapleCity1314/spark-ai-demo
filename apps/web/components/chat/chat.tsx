@@ -175,14 +175,14 @@ export function Chat({
                 }
                 setPendingQuestionId(questionId);
                 const sessionId = getOrCreateSessionId();
-                const prompt = [
-                  "问卷作答：",
-                  `session_id=${sessionId}`,
-                  `question_id=${questionId}`,
-                  `choice_id=${optionId}`,
-                  `choice_text=${optionText}`,
-                  "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。",
-                ].join(", ");
+                  const prompt = [
+                    "问卷作答：",
+                    `session_id=${sessionId}`,
+                    `question_id=${questionId}`,
+                    `choice_id=${optionId}`,
+                    `choice_text=${optionText}`,
+                    "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。不要复述参数或输出。",
+                  ].join(", ");
                 sendMessage({ text: prompt, files: [] });
               }}
             />

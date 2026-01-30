@@ -767,6 +767,7 @@ export const PromptInputTextarea = ({
   onChange,
   className,
   placeholder = "Ask v0 to build...",
+  disabled,
   ...props
 }: PromptInputTextareaProps) => {
   const controller = useOptionalPromptInputController();
@@ -784,6 +785,7 @@ export const PromptInputTextarea = ({
   }, [currentValue]);
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
+    if (disabled) return;
     if (e.key === "Enter") {
       if (isComposing || e.nativeEvent.isComposing) return;
       if (e.shiftKey) return;
@@ -801,6 +803,7 @@ export const PromptInputTextarea = ({
   };
 
   const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = (event) => {
+    if (disabled) return;
     const items = event.clipboardData?.items;
     if (!items) return;
     const files: File[] = [];
@@ -817,6 +820,7 @@ export const PromptInputTextarea = ({
   };
 
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    if (disabled) return;
     const value = e.currentTarget.value;
     setLocalValue(value);
     if (controller) {
@@ -848,6 +852,13 @@ export const PromptInputTextarea = ({
         // Dark
         "dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:caret-white dark:selection:bg-zinc-700 dark:selection:text-white",
         
+        // Disabled state
+        disabled && [
+          "cursor-not-allowed",
+          "text-zinc-400 placeholder:text-zinc-300",
+          "dark:text-zinc-600 dark:placeholder:text-zinc-700",
+        ],
+        
         "focus-visible:ring-0 focus-visible:ring-offset-0",
         // 两种固定高度状态 - 减少内边距让文本更靠近边框
         isExpanded ? "py-2 overflow-y-auto" : "py-2 overflow-hidden",
@@ -869,6 +880,7 @@ export const PromptInputTextarea = ({
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
       placeholder={placeholder}
+      disabled={disabled}
       {...props}
       {...controlledProps}
     />

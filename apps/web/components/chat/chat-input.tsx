@@ -56,16 +56,20 @@ export function ChatInput({
         <PromptInputBody>
           <PromptInputTextarea 
             placeholder={showWelcome ? "给 Agent 发送消息" : "Ask Agent to build..."} 
+            disabled={status === "submitted" || status === "streaming"}
           />
           <PromptInputFooter>
             <PromptInputTools>
               <PromptInputActionMenu>
-                <PromptInputActionMenuTrigger />
+                <PromptInputActionMenuTrigger 
+                  disabled={status === "submitted" || status === "streaming"}
+                />
                 <PromptInputActionMenuContent>
                   <PromptInputActionMenuItem
                     onSelect={() =>
                       document.getElementById("file-upload")?.click()
                     }
+                    disabled={status === "submitted" || status === "streaming"}
                   >
                     <Upload className="mr-2 size-4" /> Upload a File
                   </PromptInputActionMenuItem>
@@ -74,6 +78,7 @@ export function ChatInput({
 
               <PromptInputButton
                 onClick={onWebSearchToggle}
+                disabled={status === "submitted" || status === "streaming"}
                 className={cn(
                   "transition-colors",
                   webSearchEnabled
@@ -88,7 +93,7 @@ export function ChatInput({
 
             <PromptInputSubmit
               status={status}
-              disabled={status === "submitted" || (!messagesLength && status === "streaming")}
+              disabled={status === "submitted" || status === "streaming"}
               onClick={() => {
                 if (status === "streaming") {
                   onStop();

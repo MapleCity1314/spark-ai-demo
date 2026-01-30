@@ -4,7 +4,7 @@ import { UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { cn, fetchWithErrorHandlers } from "@/lib/utils";
 import { nanoid } from "nanoid";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChatInput } from "./chat-input";
 import { ChatRender } from "./chat-render";
@@ -66,6 +66,12 @@ export function Chat({
     setCookie("spoon_session_id", next);
     return next;
   };
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
 
   const {
     messages,
@@ -136,6 +142,10 @@ export function Chat({
     }
   }, [messages]);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, status, scrollToBottom]);
+
 
   void setMessages;
   void resumeStream;
@@ -155,27 +165,28 @@ export function Chat({
       {hasMessages ? (
         <>
           <div className="mx-auto w-full max-w-2xl px-4">
-              <ChatRender
-                className="pb-40"
-                messages={messages}
-                activeQuestionId={activeQuestionId}
-                onQuestionSelect={({ questionId, optionId, optionText }) => {
-                  if (!questionId || pendingQuestionId === questionId) {
-                    return;
-                  }
-                  setPendingQuestionId(questionId);
-                  const sessionId = getOrCreateSessionId();
-                  const prompt = [
-                    "问卷作答：",
-                    `session_id=${sessionId}`,
-                    `question_id=${questionId}`,
-                    `choice_id=${optionId}`,
-                    `choice_text=${optionText}`,
-                    "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。",
-                  ].join(", ");
-                  sendMessage({ text: prompt, files: [] });
-                }}
-              />
+            <ChatRender
+              className="pb-40"
+              messages={messages}
+              activeQuestionId={activeQuestionId}
+              onQuestionSelect={({ questionId, optionId, optionText }) => {
+                if (!questionId || pendingQuestionId === questionId) {
+                  return;
+                }
+                setPendingQuestionId(questionId);
+                const sessionId = getOrCreateSessionId();
+                const prompt = [
+                  "问卷作答：",
+                  `session_id=${sessionId}`,
+                  `question_id=${questionId}`,
+                  `choice_id=${optionId}`,
+                  `choice_text=${optionText}`,
+                  "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。",
+                ].join(", ");
+                sendMessage({ text: prompt, files: [] });
+              }}
+            />
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="fixed inset-x-0 bottom-0 z-10">

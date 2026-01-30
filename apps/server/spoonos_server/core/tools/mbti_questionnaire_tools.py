@@ -55,8 +55,35 @@ def _build_questionnaire() -> Dict[str, Any]:
     return {
         "title": "MBTI 量化交易者画像问卷（测试版）",
         "version": "v1",
-        "current_index": 0,
         "questions": questions,
+    }
+
+
+_SESSIONS: Dict[str, Dict[str, Any]] = {}
+
+
+def _get_session(session_id: str) -> Dict[str, Any]:
+    session = _SESSIONS.get(session_id)
+    if not session:
+        session = {"index": 0, "answers": []}
+        _SESSIONS[session_id] = session
+    return session
+
+
+def _format_question(
+    questionnaire: Dict[str, Any], index: int
+) -> Optional[Dict[str, Any]]:
+    questions = questionnaire.get("questions", [])
+    if index < 0 or index >= len(questions):
+        return None
+    question = questions[index]
+    return {
+        "question_id": question.get("id"),
+        "title": questionnaire.get("title"),
+        "index": index + 1,
+        "total": len(questions),
+        "question": question.get("question"),
+        "options": question.get("options", []),
     }
 
 
@@ -66,6 +93,10 @@ if BaseTool:
         description: str = "生成 MBTI 量化交易者画像问卷（结构化题目）。"
         parameters: dict = _tool_schema(
             {
+                "session_id": {
+                    "type": "string",
+                    "description": "会话 ID，用于问卷进度追踪。",
+                },
                 "version": {
                     "type": "string",
                     "description": "问卷版本（可选，默认 v1）。",
@@ -73,11 +104,68 @@ if BaseTool:
             }
         )
 
-        async def execute(self, version: Optional[str] = None) -> Dict[str, Any]:
-            payload = _build_questionnaire()
+        async def execute(
+            self, session_id: str, version: Optional[str] = None
+        ) -> Dict[str, Any]:
+            questionnaire = _build_questionnaire()
             if version and version != "v1":
-                payload["version"] = version
-            return payload
+                questionnaire["version"] = version
+            session = _get_session(session_id)
+            question = _format_question(questionnaire, session["index"])
+            return {
+                "status": "question",
+                "session_id": session_id,
+                "question": question,
+                "answers": session["answers"],
+            }
+
+    class MBTITraderQuestionnaireNextTool(BaseTool):
+        name: str = "mbti_trader_questionnaire_next"
+        description: str = "记录上一题答案并返回下一题（结构化）。"
+        parameters: dict = _tool_schema(
+            {
+                "session_id": {
+                    "type": "string",
+                    "description": "会话 ID，用于问卷进度追踪。",
+                },
+                "answer": {
+                    "type": "object",
+                    "description": "上一题答案（question_id + choice）。",
+                    "properties": {
+                        "question_id": {"type": "string"},
+                        "choice": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "text": {"type": "string"},
+                            },
+                        },
+                    },
+                },
+            },
+            required=["session_id", "answer"],
+        )
+
+        async def execute(
+            self, session_id: str, answer: Dict[str, Any]
+        ) -> Dict[str, Any]:
+            questionnaire = _build_questionnaire()
+            session = _get_session(session_id)
+            session["answers"].append(answer)
+            session["index"] += 1
+            question = _format_question(questionnaire, session["index"])
+            if not question:
+                return {
+                    "status": "completed",
+                    "session_id": session_id,
+                    "answers": session["answers"],
+                }
+            return {
+                "status": "question",
+                "session_id": session_id,
+                "question": question,
+                "answers": session["answers"],
+            }
 
 else:
     MBTITraderQuestionnaireTool = None

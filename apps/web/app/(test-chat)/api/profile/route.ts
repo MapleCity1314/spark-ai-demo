@@ -1,3 +1,5 @@
+"use server";
+
 import { NextResponse } from "next/server";
 
 const getServerBaseUrl = () => {
@@ -8,17 +10,19 @@ const getServerBaseUrl = () => {
   return `http://${raw}`;
 };
 
-
-export async function GET(
-  _request: Request,
-  context: { params: { id: string } },
-) {
+export async function POST(request: Request) {
   const baseUrl = getServerBaseUrl();
-  const response = await fetch(`${baseUrl}/v1/profiles/${context.params.id}`);
+  const body = await request.json();
+  const response = await fetch(`${baseUrl}/v1/profiles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
   if (!response.ok) {
+    const errorText = await response.text();
     return NextResponse.json(
-      { error: "Profile fetch failed" },
+      { error: errorText || "Profile create failed" },
       { status: response.status },
     );
   }

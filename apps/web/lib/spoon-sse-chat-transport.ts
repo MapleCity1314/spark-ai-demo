@@ -1,73 +1,29 @@
 import {
+  ChatTransport,
+  UIMessage,
+  UIMessageChunk,
   createUIMessageStream,
-  createUIMessageStreamResponse,
-  type UIMessage,
-  type UIMessageChunk,
 } from "ai";
 
-const baseURL =
-  process.env.SPOONOS_API_BASE_URL ?? "http://localhost:8000";
+type SpoonSseChatTransportOptions = {
+  baseUrl: string;
+  getBody?: () => Record<string, unknown>;
+  fetchImpl?: typeof fetch;
+};
 
-export async function POST(req: Request) {
-  const body = await req.json();
-  const {
-    messages,
-    toolkits,
-    mcp_enabled,
-    sub_agents,
-    profile_prompt,
-    session_id,
-  } = body as {
-    messages: UIMessage[];
-    toolkits?: string[];
-    mcp_enabled?: boolean;
-    sub_agents?: Array<Record<string, unknown>>;
-    profile_prompt?: string;
-    session_id?: string;
-  };
+const buildTextContent = (message: UIMessage) =>
+  message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => (part as { text?: string }).text ?? "")
+    .join("");
 
-  if (!messages?.length) {
-    return new Response("messages required", { status: 400 });
-  }
-
-  const chatMessages = messages
-    .map((message) => {
-      const text = message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => (part as { text?: string }).text ?? "")
-        .join("");
-      return {
-        role: message.role,
-        content: text,
-      };
-    })
-    .filter((message) => message.content.trim().length > 0);
-
-  const response = await fetch(`${baseURL}/v1/agent/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: chatMessages,
-        profile_prompt,
-        session_id,
-        toolkits,
-        mcp_enabled,
-        sub_agents,
-        stream_mode: "sse",
-      }),
-  });
-
-  if (!response.ok || !response.body) {
-    const errorText = await response.text();
-    return new Response(errorText || "Upstream error", {
-      status: response.status || 500,
-    });
-  }
-
-  const stream = createUIMessageStream({
+const parseSseToUiMessageStream = (
+  stream: ReadableStream<Uint8Array>,
+): ReadableStream<UIMessageChunk> =>
+  createUIMessageStream({
     execute: async ({ writer }) => {
       const decoder = new TextDecoder();
-      const reader = response.body!.getReader();
+      const reader = stream.getReader();
       const textState = new Map<string, string>();
       const toolInputSeen = new Set<string>();
       let buffer = "";
@@ -210,5 +166,60 @@ export async function POST(req: Request) {
     },
   });
 
-  return createUIMessageStreamResponse({ stream: stream as ReadableStream<UIMessageChunk> });
+export class SpoonSseChatTransport<UI_MESSAGE extends UIMessage>
+  implements ChatTransport<UI_MESSAGE>
+{
+  private readonly baseUrl: string;
+  private readonly getBody?: () => Record<string, unknown>;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor({ baseUrl, getBody, fetchImpl }: SpoonSseChatTransportOptions) {
+    this.baseUrl = baseUrl;
+    this.getBody = getBody;
+    this.fetchImpl = fetchImpl ?? fetch;
+  }
+
+  async sendMessages({
+    messages,
+    abortSignal,
+    headers,
+    body,
+  }: Parameters<ChatTransport<UI_MESSAGE>["sendMessages"]>[0]): Promise<
+    ReadableStream<UIMessageChunk>
+  > {
+    const chatMessages = messages
+      .map((message) => ({
+        role: message.role,
+        content: buildTextContent(message),
+      }))
+      .filter((message) => message.content.trim().length > 0);
+
+    const requestBody = {
+      messages: chatMessages,
+      stream_mode: "sse",
+      ...(this.getBody?.() ?? {}),
+      ...(body ?? {}),
+    };
+
+    const response = await this.fetchImpl(`${this.baseUrl}/v1/agent/stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(headers instanceof Headers ? Object.fromEntries(headers) : headers),
+      },
+      body: JSON.stringify(requestBody),
+      signal: abortSignal,
+    });
+
+    if (!response.ok || !response.body) {
+      const errorText = await response.text();
+      throw new Error(errorText || "Upstream error");
+    }
+
+    return parseSseToUiMessageStream(response.body);
+  }
+
+  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+    return null;
+  }
 }

@@ -62,6 +62,7 @@ async def stream_agent(request: StreamRequest) -> StreamingResponse:
         config=config,
         system_prompt=request.system_prompt,
         profile_prompt=request.profile_prompt,
+        session_id=request.session_id,
         provider=request.provider,
         model=request.model,
         toolkits=request.toolkits,

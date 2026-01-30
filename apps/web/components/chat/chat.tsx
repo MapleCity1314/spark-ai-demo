@@ -1,12 +1,14 @@
 "use client";
 
-import { UIMessage, DefaultChatTransport } from "ai";
+import { UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { cn, fetchWithErrorHandlers } from "@/lib/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { nanoid } from "nanoid";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChatInput } from "./chat-input";
 import { ChatRender } from "./chat-render";
+import { SpoonSseChatTransport } from "@/lib/spoon-sse-chat-transport";
 
 interface ChatProps {
   initialMessage?: UIMessage;
@@ -31,7 +33,6 @@ export function Chat({
   const params = useParams<{ id?: string }>();
   const searchParams = useSearchParams();
   const hasAppendedQueryRef = useRef(false);
-  const handledProfileIdsRef = useRef<Set<string>>(new Set());
 
   const seedMessages =
     initialMessages ?? (initialMessage ? [initialMessage] : []);
@@ -56,6 +57,16 @@ export function Chat({
     )}; path=/; max-age=${maxAge}`;
   };
 
+  const getOrCreateSessionId = () => {
+    const existing = getCookie("spoon_session_id");
+    if (existing) {
+      return existing;
+    }
+    const next = nanoid();
+    setCookie("spoon_session_id", next);
+    return next;
+  };
+
   const {
     messages,
     setMessages,
@@ -66,13 +77,16 @@ export function Chat({
     addToolOutput,
   } = useChat({
     messages: seedMessages,
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      body: () => ({
+    transport: new SpoonSseChatTransport({
+      baseUrl:
+        process.env.NEXT_PUBLIC_SPOONOS_API_BASE_URL ??
+        "http://localhost:8000",
+      getBody: () => ({
         profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
         toolkits: webSearchEnabled ? ["profile", "web"] : ["profile"],
+        session_id: getOrCreateSessionId(),
       }),
-      fetch: fetchWithErrorHandlers,
+      fetchImpl: fetchWithErrorHandlers,
     }),
     onError: (error) => {
       console.error("Chat error:", error);
@@ -82,42 +96,7 @@ export function Chat({
   const query = searchParams.get("query") ?? searchParams.get("q") ?? undefined;
   const chatId = params?.id;
   const hasMessages = messages.length > 0;
-  const [questionnaireState, setQuestionnaireState] = useState<{
-    toolCallId: string;
-    title?: string;
-    currentIndex: number;
-    questions: Array<{
-      id: string;
-      question: string;
-      options: Array<{ id: string; text: string }>;
-    }>;
-  } | null>(null);
-  const [questionnaireHistory, setQuestionnaireHistory] = useState<
-    Array<{
-      index: number;
-      total: number;
-      question: string;
-      selectedOption: { id: string; text: string };
-      title?: string;
-    }>
-  >([]);
-
-  const activeQuestionnaire = useMemo(() => {
-    if (!questionnaireState) {
-      return null;
-    }
-    const question = questionnaireState.questions[questionnaireState.currentIndex];
-    if (!question) {
-      return null;
-    }
-    return {
-      title: questionnaireState.title,
-      index: questionnaireState.currentIndex + 1,
-      total: questionnaireState.questions.length,
-      question: question.question,
-      options: question.options,
-    };
-  }, [questionnaireState]);
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (query && !hasAppendedQueryRef.current) {
@@ -134,109 +113,27 @@ export function Chat({
       .flatMap((message) => message.parts)
       .filter(
         (part) =>
-          part.type === "tool-mbti_trader_questionnaire" &&
+          (part.type === "tool-mbti_trader_questionnaire" ||
+            part.type === "tool-mbti_trader_questionnaire_next") &&
           (part as { output?: unknown }).output,
       )
-      .map((part) => part as { toolCallId?: string; output?: unknown });
+      .map((part) => part as { output?: unknown });
 
     const latest = toolParts[toolParts.length - 1];
     if (!latest || typeof latest.output !== "object" || latest.output === null) {
       return;
     }
-
     const payload = latest.output as {
-      title?: string;
-      current_index?: number;
-      questions?: Array<{
-        id: string;
-        question: string;
-        options?: Array<{ id: string; text: string }>;
-      }>;
+      status?: string;
+      question?: { question_id?: string };
     };
-
-    if (!payload.questions || payload.questions.length === 0) {
-      return;
+    if (payload.status === "question" && payload.question?.question_id) {
+      setActiveQuestionId(payload.question.question_id);
+    } else {
+      setActiveQuestionId(null);
     }
-
-    const toolCallId = latest.toolCallId ?? "questionnaire";
-    const shouldReset =
-      !questionnaireState || questionnaireState.toolCallId !== toolCallId;
-    if (shouldReset) {
-      setQuestionnaireHistory([]);
-    }
-    setQuestionnaireState((prev) => {
-      if (prev?.toolCallId === toolCallId) {
-        return prev;
-      }
-      return {
-        toolCallId,
-        title: payload.title,
-        currentIndex: payload.current_index ?? 0,
-        questions: payload.questions.map((question) => ({
-          id: question.id,
-          question: question.question,
-          options: question.options ?? [],
-        })),
-      };
-    });
   }, [messages]);
 
-  useEffect(() => {
-    const profileOutputs = messages.flatMap((message) =>
-      message.parts
-        .filter((part) => part.type === "tool-mbti_profile_create")
-        .map((part) => part as { output?: unknown; state?: string }),
-    );
-
-    const handleProfile = async (output: unknown) => {
-      if (!output || typeof output !== "object") {
-        return;
-      }
-      const record = output as {
-        profile_id?: string;
-        profileId?: string;
-        profile?: unknown;
-        profile_prompt?: string;
-      };
-      const profileId = record.profile_id ?? record.profileId;
-      if (!profileId || handledProfileIdsRef.current.has(profileId)) {
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/profile/${profileId}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          return;
-        }
-        const data = (await response.json()) as {
-          profile_id?: string;
-          profile?: unknown;
-          profile_prompt?: string;
-        };
-        if (!data.profile_id) {
-          return;
-        }
-        handledProfileIdsRef.current.add(data.profile_id);
-        if (data.profile_prompt) {
-          setCookie("spoon_profile_prompt", data.profile_prompt);
-        }
-        if (data.profile) {
-          setCookie("spoon_profile", JSON.stringify(data.profile));
-        }
-        setCookie("spoon_profile_id", data.profile_id);
-      } catch (error) {
-        console.error("Profile fetch error:", error);
-      }
-    };
-
-    void Promise.all(
-      profileOutputs
-        .filter((part) => part.state === "output-available")
-        .map((part) => handleProfile(part.output)),
-    );
-  }, [messages]);
 
   void setMessages;
   void resumeStream;
@@ -259,56 +156,9 @@ export function Chat({
             <ChatRender
               className="pb-40"
               messages={messages}
-              questionnaire={activeQuestionnaire}
-              questionnaireHistory={questionnaireHistory}
+              activeQuestionId={activeQuestionId}
               onQuestionSelect={(optionText) => {
-                if (!questionnaireState) {
-                  return;
-                }
-                const currentQuestion =
-                  questionnaireState.questions[questionnaireState.currentIndex];
-                const matchedOption =
-                  currentQuestion.options.find(
-                    (option) => option.text === optionText,
-                  ) ?? { id: "", text: optionText };
-                const historyNext = [
-                  ...questionnaireHistory,
-                  {
-                    index: questionnaireState.currentIndex + 1,
-                    total: questionnaireState.questions.length,
-                    question: currentQuestion.question,
-                    selectedOption: matchedOption,
-                    title: questionnaireState.title,
-                  },
-                ];
-
-                setQuestionnaireHistory(historyNext);
-
                 sendMessage({ text: optionText, files: [] });
-                setQuestionnaireState((prev) => {
-                  if (!prev) {
-                    return prev;
-                  }
-                  const nextIndex = prev.currentIndex + 1;
-                  if (nextIndex >= prev.questions.length) {
-                    const summary = historyNext.map((item) => ({
-                      id: `q${item.index}`,
-                      question: item.question,
-                      choice: {
-                        id: item.selectedOption.id,
-                        text: item.selectedOption.text,
-                      },
-                    }));
-                    sendMessage({
-                      text: `问卷完成。请根据以下结构化答案调用 mbti_profile_create 生成画像：${JSON.stringify(
-                        summary,
-                      )}`,
-                      files: [],
-                    });
-                    return null;
-                  }
-                  return { ...prev, currentIndex: nextIndex };
-                });
               }}
             />
           </div>

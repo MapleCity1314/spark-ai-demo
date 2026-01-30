@@ -105,6 +105,7 @@ async def chat_completions(request: OpenAIChatCompletionRequest):
         config=config,
         system_prompt=system_prompt,
         profile_prompt=getattr(request, "profile_prompt", None),
+        session_id=getattr(request, "session_id", None),
         provider=provider,
         model=model_name,
         toolkits=toolkits,

@@ -37,6 +37,7 @@ def create_react_agent(
     config: AppConfig,
     system_prompt: Optional[str],
     profile_prompt: Optional[str],
+    session_id: Optional[str],
     provider: Optional[str],
     model: Optional[str],
     toolkits: Optional[List[str]],
@@ -57,7 +58,9 @@ def create_react_agent(
         subagent_tool = SubAgentTool(subagent_map)
         tools.append(subagent_tool)
 
-    tools, tool_wrappers = wrap_tools_for_calls(tools)
+    tools, tool_wrappers = wrap_tools_for_calls(
+        tools, context={"session_id": session_id} if session_id else None
+    )
 
     tool_manager = ToolManager(tools)
     tool_list = _build_tool_list(tool_manager)

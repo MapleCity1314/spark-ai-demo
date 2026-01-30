@@ -4,7 +4,7 @@ import { UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { cn, fetchWithErrorHandlers } from "@/lib/utils";
 import { nanoid } from "nanoid";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChatInput } from "./chat-input";
 import { ChatRender } from "./chat-render";
@@ -67,13 +67,19 @@ export function Chat({
     return next;
   };
 
-  const {
-    messages,
-    setMessages,
-    sendMessage,
-    status,
-    stop,
-    resumeStream,
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  const { 
+    messages, 
+    setMessages, 
+    sendMessage, 
+    status, 
+    stop, 
+    resumeStream, 
     addToolOutput,
   } = useChat({
     messages: seedMessages,
@@ -134,6 +140,10 @@ export function Chat({
     }
   }, [messages]);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, status, scrollToBottom]);
+
 
   void setMessages;
   void resumeStream;
@@ -161,6 +171,8 @@ export function Chat({
                 sendMessage({ text: optionText, files: [] });
               }}
             />
+            {/* 用于自动滚动到最新消息的引用 */}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="fixed inset-x-0 bottom-0 z-10">

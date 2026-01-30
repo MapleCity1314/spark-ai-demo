@@ -1,8 +1,10 @@
 from pathlib import Path
 from typing import Dict, List
 
+from spoonos_server.skills import investment_profiler 
 
 def load_skill_index(root: Path) -> Dict[str, List[str]]:
+
     if not root.exists():
         return {}
 
@@ -14,3 +16,8 @@ def load_skill_index(root: Path) -> Dict[str, List[str]]:
         if skill_file.exists():
             skills[skill_dir.name] = [str(skill_file)]
     return skills
+
+
+SKILL_REGISTRY = [
+    investment_profiler,
+]

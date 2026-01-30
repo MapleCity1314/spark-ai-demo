@@ -14,7 +14,7 @@
 - `pnpm format`: format `ts/tsx/md` files with Prettier.
 - `pnpm check-types`: run TypeScript type checks.
 - Python server (from `apps/server`):
-  - `uvicorn spoonos_server.server.app:app --reload`: run API locally.
+- `uvicorn spoonos_server.api.app:app --reload`: run API locally.
   - `pytest`: run server tests.
 
 ## Coding Style & Naming Conventions

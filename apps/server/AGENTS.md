@@ -3,7 +3,7 @@
 This repo contains a SpoonOS ReAct API server and supporting Python code.
 
 ## Layout
-- `spoonos_server/`: FastAPI server, agents, tools, and configs.
+- `spoonos_server/`: FastAPI API layer plus core agents, tools, and configs.
 - `main.py`: Uvicorn entrypoint (`main:app`).
 - `pyproject.toml` / `requirements.txt`: Python packaging and dependencies.
 - `.env.example`: Environment variable template.
@@ -18,13 +18,13 @@ This repo contains a SpoonOS ReAct API server and supporting Python code.
 - Configure API key in `.env`:
   - `OPENROUTER_API_KEY=sk-xxxx`
 - Run demo:
-  - `uvicorn spoonos_server.server.app:app --host 0.0.0.0 --port 8000`
+  - `uvicorn spoonos_server.api.app:app --host 0.0.0.0 --port 8000`
   - Or `uvicorn main:app --host 0.0.0.0 --port 8000`
 
 ## Skills (project)
-- Local skills live in `spoonos_server/skills/<skill-name>/SKILL.md`.
+- Local skills live in `spoonos_server/core/skills/<skill-name>/SKILL.md`.
 - Add a skill by creating a new folder with a `SKILL.md` file.
-- Skill discovery is file-based (see `spoonos_server/skills/registry.py`).
+- Skill discovery is file-based (see `spoonos_server/core/skills/registry.py`).
 
 ## Notes
 - Prefer minimal, focused changes.

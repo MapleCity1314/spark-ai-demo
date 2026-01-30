@@ -41,7 +41,7 @@ OPENROUTER_API_KEY=sk-xxxx
 ### 4. 启动服务
 
 ```bash
-uvicorn spoonos_server.server.app:app --host 0.0.0.0 --port 8000
+uvicorn spoonos_server.api.app:app --host 0.0.0.0 --port 8000
 ```
 
 ### 5. 调用接口（需要可用的 API Key）
@@ -114,7 +114,7 @@ You can adjust the LLM provider and model via environment variables (`SPOON_LLM_
 ### 4. Run the Demo
 
 ```bash
-uvicorn spoonos_server.server.app:app --reload
+uvicorn spoonos_server.api.app:app --reload
 ```
 
 Then call the streaming endpoint:

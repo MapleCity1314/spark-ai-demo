@@ -97,6 +97,7 @@ export function Chat({
   const chatId = params?.id;
   const hasMessages = messages.length > 0;
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const [pendingQuestionId, setPendingQuestionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (query && !hasAppendedQueryRef.current) {
@@ -129,6 +130,7 @@ export function Chat({
     };
     if (payload.status === "question" && payload.question?.question_id) {
       setActiveQuestionId(payload.question.question_id);
+      setPendingQuestionId(null);
     } else {
       setActiveQuestionId(null);
     }
@@ -153,14 +155,27 @@ export function Chat({
       {hasMessages ? (
         <>
           <div className="mx-auto w-full max-w-2xl px-4">
-            <ChatRender
-              className="pb-40"
-              messages={messages}
-              activeQuestionId={activeQuestionId}
-              onQuestionSelect={(optionText) => {
-                sendMessage({ text: optionText, files: [] });
-              }}
-            />
+              <ChatRender
+                className="pb-40"
+                messages={messages}
+                activeQuestionId={activeQuestionId}
+                onQuestionSelect={({ questionId, optionId, optionText }) => {
+                  if (!questionId || pendingQuestionId === questionId) {
+                    return;
+                  }
+                  setPendingQuestionId(questionId);
+                  const sessionId = getOrCreateSessionId();
+                  const prompt = [
+                    "问卷作答：",
+                    `session_id=${sessionId}`,
+                    `question_id=${questionId}`,
+                    `choice_id=${optionId}`,
+                    `choice_text=${optionText}`,
+                    "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。",
+                  ].join(", ");
+                  sendMessage({ text: prompt, files: [] });
+                }}
+              />
           </div>
 
           <div className="fixed inset-x-0 bottom-0 z-10">

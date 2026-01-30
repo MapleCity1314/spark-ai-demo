@@ -22,7 +22,11 @@ interface ChatRenderProps {
   emptyTitle?: string;
   emptyDescription?: string;
   activeQuestionId?: string | null;
-  onQuestionSelect?: (optionText: string) => void;
+  onQuestionSelect?: (payload: {
+    questionId: string;
+    optionId: string;
+    optionText: string;
+  }) => void;
 }
 
 type AttachmentPart = FileUIPart | SourceDocumentUIPart;
@@ -140,7 +144,12 @@ export function ChatRender({
                               )}
                               disabled={!isActive}
                               onClick={() =>
-                                isActive && onQuestionSelect?.(option.text)
+                                isActive &&
+                                onQuestionSelect?.({
+                                  questionId: question.question_id,
+                                  optionId: option.id,
+                                  optionText: option.text,
+                                })
                               }
                             >
                               {option.id}. {option.text}

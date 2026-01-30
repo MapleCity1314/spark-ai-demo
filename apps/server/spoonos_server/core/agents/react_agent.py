@@ -88,6 +88,8 @@ def create_react_agent(
         llm=ChatBot(
             llm_provider=provider or config.llm.provider,
             model_name=model or config.llm.model,
+            api_key=config.llm.api_key,
+            base_url=config.llm.base_url,
         ),
         tools=tool_manager,
         max_steps=8,

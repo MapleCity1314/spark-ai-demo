@@ -41,3 +41,6 @@ yarn-error.log*
 .codex/*
 
 docs/*
+my-turborepo/*
+pnpm-lock.yaml
+pnpm-lock.yaml

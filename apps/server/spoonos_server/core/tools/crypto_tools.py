@@ -6,6 +6,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 try:
     from spoon_ai.tools.base import BaseTool
@@ -934,6 +935,144 @@ if BaseTool:
             }
 
 
+    class EcosystemTool(BaseTool):
+        """Chain/protocol ecosystem overview from DefiLlama."""
+
+        name: str = "get_ecosystem_overview"
+        description: str = "Get chain/protocol TVL, rank, and 90d trend from DefiLlama."
+        parameters: dict = _tool_schema(
+            {
+                "mode": {
+                    "type": "string",
+                    "description": "chain or protocol",
+                },
+                "symbol": {
+                    "type": "string",
+                    "description": "Chain name or protocol symbol/name/slug.",
+                },
+                "days": {
+                    "type": "number",
+                    "description": "History window in days (default 90).",
+                },
+            },
+            required=["symbol"],
+        )
+
+        async def execute(
+            self,
+            symbol: str,
+            mode: str = "protocol",
+            days: int = 90,
+        ) -> Dict[str, Any]:
+            if httpx is None:
+                raise RuntimeError("httpx is not installed. Install deps and retry.")
+
+            symbol = symbol.strip()
+            mode = (mode or "protocol").lower().strip()
+            days = max(7, min(int(days), 365))
+
+            if mode == "chain":
+                chains = await _defillama_get("/v2/chains")
+                chain = _pick_chain(chains or [], symbol)
+                if not chain:
+                    raise ValueError(f"Unknown chain: {symbol}")
+
+                sorted_chains = sorted(
+                    chains or [], key=lambda item: item.get("tvl", 0) or 0, reverse=True
+                )
+                rank = next(
+                    (
+                        idx + 1
+                        for idx, item in enumerate(sorted_chains)
+                        if item.get("name") == chain.get("name")
+                    ),
+                    None,
+                )
+
+                protocols = await _defillama_get("/protocols")
+                protocol_count = 0
+                for proto in protocols or []:
+                    if symbol.lower() in [c.lower() for c in proto.get("chains", [])]:
+                        protocol_count += 1
+
+                history = []
+                history_error = None
+                try:
+                    chain_name = quote(str(chain.get("name") or ""), safe="")
+                    history_raw = await _defillama_get(
+                        f"/v2/historicalChainTvl/{chain_name}"
+                    )
+                    history = _chain_tvl_series(history_raw, limit=days)
+                except Exception as exc:
+                    history_error = str(exc)
+
+                return {
+                    "mode": "chain",
+                    "symbol": symbol,
+                    "as_of": _iso_now(),
+                    "source": "defillama",
+                    "chain": {
+                        "name": chain.get("name"),
+                        "token_symbol": chain.get("tokenSymbol"),
+                        "gecko_id": chain.get("gecko_id"),
+                        "tvl_usd": chain.get("tvl"),
+                        "market_rank": rank,
+                    },
+                    "protocol_count": protocol_count,
+                    "tvl_history": history,
+                    "history_note": history_error,
+                }
+
+            protocols = await _defillama_get("/protocols")
+            protocol = _pick_protocol(protocols or [], symbol)
+            if not protocol:
+                raise ValueError(f"Unknown protocol: {symbol}")
+
+            sorted_protocols = sorted(
+                protocols or [], key=lambda item: item.get("tvl", 0) or 0, reverse=True
+            )
+            rank = next(
+                (
+                    idx + 1
+                    for idx, item in enumerate(sorted_protocols)
+                    if item.get("name") == protocol.get("name")
+                ),
+                None,
+            )
+
+            slug = protocol.get("slug") or protocol.get("name")
+            protocol_slug = quote(str(slug or ""), safe="")
+            detail = await _defillama_get(f"/protocol/{protocol_slug}")
+
+            history = []
+            if isinstance(detail, dict):
+                candidate = detail.get("tvl")
+                if isinstance(candidate, list):
+                    history = _chain_tvl_series(candidate, limit=days)
+                elif isinstance(detail.get("tvlHistory"), list):
+                    history = _chain_tvl_series(detail.get("tvlHistory"), limit=days)
+
+            return {
+                "mode": "protocol",
+                "symbol": symbol,
+                "as_of": _iso_now(),
+                "source": "defillama",
+                "protocol": {
+                    "name": protocol.get("name"),
+                    "symbol": protocol.get("symbol"),
+                    "category": protocol.get("category"),
+                    "chains": protocol.get("chains", []),
+                    "tvl_usd": protocol.get("tvl"),
+                    "market_rank": rank,
+                    "change_1d": protocol.get("change_1d"),
+                    "change_7d": protocol.get("change_7d"),
+                    "change_1m": protocol.get("change_1m"),
+                },
+                "protocol_count": len(protocols or []),
+                "tvl_history": history,
+            }
+
+
     class TargetAnalysisTool(BaseTool):
         """PnL, targets, R:R, scaling plan, rebalance suggestion."""
 
@@ -977,20 +1116,28 @@ if BaseTool:
             pnl_amount = (current_price - avg_cost) * quantity
             pnl_pct = (current_price - avg_cost) / avg_cost if avg_cost else None
 
-            price_trend = market.get("price_trend", {})
-            high_low = price_trend.get("high_low", {})
-            highs = [
-                (high_low.get("7d") or {}).get("high"),
-                (high_low.get("30d") or {}).get("high"),
-                (high_low.get("90d") or {}).get("high"),
-            ]
-            lows = [
-                (high_low.get("7d") or {}).get("low"),
-                (high_low.get("30d") or {}).get("low"),
-                (high_low.get("90d") or {}).get("low"),
-            ]
-            resistance = max([v for v in highs if v is not None], default=None)
-            support = min([v for v in lows if v is not None], default=None)
+            support = None
+            resistance = None
+            try:
+                tech = await TechnicalAnalysisTool().execute(symbol)
+                levels = (tech.get("support_resistance") or {}).get("combined") or {}
+                support = levels.get("support")
+                resistance = levels.get("resistance")
+            except Exception:
+                price_trend = market.get("price_trend", {})
+                high_low = price_trend.get("high_low", {})
+                highs = [
+                    (high_low.get("7d") or {}).get("high"),
+                    (high_low.get("30d") or {}).get("high"),
+                    (high_low.get("90d") or {}).get("high"),
+                ]
+                lows = [
+                    (high_low.get("7d") or {}).get("low"),
+                    (high_low.get("30d") or {}).get("low"),
+                    (high_low.get("90d") or {}).get("low"),
+                ]
+                resistance = max([v for v in highs if v is not None], default=None)
+                support = min([v for v in lows if v is not None], default=None)
 
             vol_data = await VolatilityTool().execute(symbol, interval="5m", limit=200)
             vol = vol_data.get("volatility", {})
@@ -1084,33 +1231,6 @@ if BaseTool:
                     "reasons": reasons,
                     "market_risk": risk_level,
                 },
-            }
-
-
-    class OnChainTool(BaseTool):
-        """??????????????MVP???"""
-
-        name: str = "get_onchain_data"
-        description: str = "???????"
-        parameters: dict = _tool_schema(
-            {
-                "symbol": {
-                    "type": "string",
-                    "description": "Token symbol??? BTC, ETH.",
-                },
-            },
-            required=["symbol"],
-        )
-
-        async def execute(self, symbol: str) -> Dict[str, Any]:
-            symbol = symbol.upper()
-            return {
-                "symbol": symbol,
-                "as_of": _iso_now(),
-                "mock": True,
-                "liquidity": _score(symbol, "liquidity", 1e6, 5e10),
-                "whale_addresses": int(_score(symbol, "whales", 10, 2000)),
-                "net_flow_24h": _score(symbol, "net_flow", -1e9, 1e9),
             }
 
 
@@ -1413,11 +1533,9 @@ if BaseTool:
 
 
 else:
-        MarketDataTool = None
-        SentimentTool = None
-        RiskAnalysisTool = None
-        EcosystemTool = None
-        OnChainTool = None
-        SocialSentimentTool = None
-        VolatilityTool = None
-        TechnicalAnalysisTool = None
+    MarketDataTool = None
+    EcosystemTool = None
+    SocialSentimentTool = None
+    TargetAnalysisTool = None
+    VolatilityTool = None
+    TechnicalAnalysisTool = None

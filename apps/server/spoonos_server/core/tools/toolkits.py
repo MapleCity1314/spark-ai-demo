@@ -40,24 +40,18 @@ try:
     from spoonos_server.core.tools.crypto_tools import (
         EcosystemTool,
         MarketDataTool,
-        OnChainTool,
-        RiskAnalysisTool,
         SocialSentimentTool,
         TargetAnalysisTool,
         TechnicalAnalysisTool,
         VolatilityTool,
-        SentimentTool,
     )
 except Exception:  # pragma: no cover - optional toolkit
     EcosystemTool = None
     MarketDataTool = None
-    OnChainTool = None
-    RiskAnalysisTool = None
     SocialSentimentTool = None
     TargetAnalysisTool = None
     TechnicalAnalysisTool = None
     VolatilityTool = None
-    SentimentTool = None
 
 
 TOOLKIT_REGISTRY: Dict[str, Any] = {
@@ -77,14 +71,11 @@ TOOLKIT_REGISTRY: Dict[str, Any] = {
         tool()
         for tool in (
             MarketDataTool,
-            SentimentTool,
             SocialSentimentTool,
             TargetAnalysisTool,
             TechnicalAnalysisTool,
             VolatilityTool,
-            RiskAnalysisTool,
             EcosystemTool,
-            OnChainTool,
         )
         if tool
     ],

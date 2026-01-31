@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Activity, User, AlertTriangle } from "lucide-react"; // 引入图标用于移动端导航
+import { MessageSquare, Activity, User } from "lucide-react"; // 引入图标用于移动端导航
+import { useChat } from "@ai-sdk/react";
+import { nanoid } from "nanoid";
+import { UIMessage } from "ai";
 
 import HPBar from "../components/hp-bar";
 import BattleHeader from "../components/battle/battle-header";
@@ -12,12 +15,10 @@ import BattleControlPanel from "../components/battle/battle-control-panel";
 import MarketPanel from "../components/battle/market-panel";
 import { useAppStore } from "../store/use-app-store";
 import {
-  generateFinalReport,
-  generateMirrorResponse,
-  getMarketData,
-  judgeScoring
-} from "../services/geminiService";
+  runAgent
+} from "../services/agentService";
 import { Message } from "../types";
+import { SpoonSseChatTransport } from "@/lib/spoon-sse-chat-transport";
 
 // 定义移动端选项卡类型
 type MobileTab = "chat" | "status" | "market";
@@ -44,54 +45,149 @@ export default function BattlePage() {
   const setFinalReport = useAppStore((state) => state.setFinalReport);
   const setActiveTab = useAppStore((state) => state.setActiveTab);
 
-  const typingIntervalRef = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
 
   // 新增: 移动端当前显示的 Tab，默认为聊天
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
 
-  useEffect(() => {
-    // 聊天更新时自动滚动
-    if (mobileTab === "chat") {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const getCookie = useCallback((name: string) => {
+    if (typeof document === "undefined") {
+      return null;
     }
-  }, [battleState.history, battleState.displayContent, mobileTab]);
-
-  useEffect(() => {
-    return () => {
-      if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
-    };
+    const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+    return match ? decodeURIComponent(match[1]) : null;
   }, []);
+
+  const setCookie = useCallback((name: string, value: string, maxAgeDays = 30) => {
+    if (typeof document === "undefined") {
+      return;
+    }
+    const maxAge = maxAgeDays * 24 * 60 * 60;
+    document.cookie = `${name}=${encodeURIComponent(
+      value
+    )}; path=/; max-age=${maxAge}`;
+  }, []);
+
+  const getOrCreateSessionId = useCallback(() => {
+    const existing = getCookie("spoon_session_id");
+    if (existing) {
+      return existing;
+    }
+    const next = nanoid();
+    setCookie("spoon_session_id", next);
+    return next;
+  }, [getCookie, setCookie]);
 
   useEffect(() => {
     if (selectedDims.length === 0) router.replace("/setup");
   }, [router, selectedDims.length]);
 
-  const typeText = useCallback(
-    (text: string, speaker: "user" | "mirror" | "judge" | "system") =>
-      new Promise<void>((resolve) => {
-        if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
-        setBattleState((prev) => ({ ...prev, isTyping: true, displayContent: "", speaker }));
-        let i = 0;
-        typingIntervalRef.current = window.setInterval(() => {
-          setBattleState((prev) => ({ ...prev, displayContent: text.slice(0, i + 1) }));
-          i += 1;
-          if (i >= text.length) {
-            if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
-            setBattleState((prev) => ({ ...prev, isTyping: false }));
-            resolve();
-          }
-        }, 20);
+  const requestPrompt = useMemo(() => {
+    const parts = [
+      "这是一个投资辩论庭审场景。",
+      `用户人格：${userMBTI}`,
+      `镜像对手人格：${mirrorMBTI}`,
+      `投资标的：${targetSymbol}`,
+      `辩论维度顺序：${selectedDims.join("、") || "未指定"}`,
+    ];
+    if (marketData) {
+      parts.push(
+        `市场数据：价格 ${marketData.price}，24h涨跌 ${marketData.change24h}，情绪 ${marketData.sentiment}，风险 ${marketData.risk}。`,
+      );
+    }
+    return parts.join("\n");
+  }, [marketData, mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
+
+  const chatTransport = useMemo(
+    () =>
+      new SpoonSseChatTransport({
+        baseUrl:
+          process.env.NEXT_PUBLIC_SPOONOS_API_BASE_URL ??
+          "http://localhost:8000",
+        getBody: () => ({
+          system_prompt: requestPrompt,
+          profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
+          toolkits: ["profile", "crypto", "web"],
+          session_id: getOrCreateSessionId(),
+        }),
       }),
-    [setBattleState]
+    [getCookie, getOrCreateSessionId, requestPrompt],
   );
+
+  const { messages, sendMessage, status } = useChat({
+    transport: chatTransport,
+    onError: (error) => {
+      console.error("Battle chat error:", error);
+    },
+  });
+
+  const getMessageText = (message: UIMessage) =>
+    message.parts
+      .filter((part) => part.type === "text")
+      .map((part) => (part as { text?: string }).text ?? "")
+      .join("");
+
+  const extractJsonFromText = (text: string) => {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) {
+      return null;
+    }
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  };
 
   const initBattle = useCallback(async () => {
     if (selectedDims.length === 0) return;
     setLoading(true);
-    const data = await getMarketData(targetSymbol);
-    setMarketData(data);
+    const marketPrompt = `
+请为 ${targetSymbol} 生成市场概览。只返回纯 JSON（不要代码块、不要多余文字）。
+字段要求：
+{
+  "symbol": string,
+  "price": string,
+  "change24h": string,
+  "sentiment": string,
+  "risk": string,
+  "sources": [{"title": string, "uri": string}]
+}
+如果缺失信息，请用“未知”或空数组填充。`.trim();
+    try {
+      const resultMessages = await runAgent({
+        message: marketPrompt,
+        sessionId: getOrCreateSessionId(),
+        systemPrompt: requestPrompt,
+        profilePrompt: getCookie("spoon_profile_prompt") ?? undefined,
+        toolkits: ["profile", "crypto", "web"],
+      });
+      const text = resultMessages.map(getMessageText).join("\n");
+      const parsed = extractJsonFromText(text);
+      if (parsed) {
+        setMarketData(parsed);
+      } else {
+        setMarketData({
+          symbol: targetSymbol,
+          price: "未知",
+          change24h: "未知",
+          sentiment: "未知",
+          risk: "未知",
+          sources: [],
+        });
+      }
+    } catch (error) {
+      console.error("Market data error:", error);
+      setMarketData({
+        symbol: targetSymbol,
+        price: "未知",
+        change24h: "未知",
+        sentiment: "未知",
+        risk: "未知",
+        sources: [],
+      });
+    }
     setBattleState(() => ({
       userHP: 50,
       currentDimensionIndex: 0,
@@ -101,12 +197,17 @@ export default function BattlePage() {
       speaker: "system",
       isTakingDamage: false
     }));
-    await typeText(
-      `庭审正式开启。被告人 ${userMBTI} 申请买入 $${targetSymbol}。控方审计员 ${mirrorMBTI} 已入场，当前维度：${selectedDims[0]}。请开始你的辩解。`,
-      "system"
-    );
     setLoading(false);
-  }, [mirrorMBTI, selectedDims, setBattleState, setLoading, setMarketData, targetSymbol, typeText, userMBTI]);
+  }, [
+    getCookie,
+    getOrCreateSessionId,
+    requestPrompt,
+    selectedDims,
+    setBattleState,
+    setLoading,
+    setMarketData,
+    targetSymbol
+  ]);
 
   useEffect(() => {
     if (hasInitializedRef.current || selectedDims.length === 0) return;
@@ -115,69 +216,17 @@ export default function BattlePage() {
   }, [initBattle, selectedDims.length]);
 
   const handleAction = useCallback(
-    async (action: "message" | "concede" | "insist", text?: string) => {
-      if (battleState.isTyping || loading || !marketData || selectedDims.length === 0) return;
-      setLoading(true);
+    (action: "message" | "concede" | "insist", text?: string) => {
+      const isBusy = loading || status === "streaming" || status === "submitted";
+      if (isBusy || selectedDims.length === 0) return;
 
       let userText = text || "";
       if (action === "concede") userText = "我承认...我可能确实太冲动了，逻辑上有瑕疵。";
       if (action === "insist") userText = "不，我有我的盘感，这就是我的核心策略！";
 
-      const userMsg: Message = { role: "user", content: userText };
-      await typeText(userText, "user");
-      setBattleState((prev) => ({ ...prev, history: [...prev.history, userMsg], displayContent: "" }));
-
-      const currentDim = selectedDims[battleState.currentDimensionIndex] || selectedDims[0];
-      const recentHistory = JSON.stringify([...battleState.history, userMsg].slice(-3));
-      const mirrorRes = await generateMirrorResponse(
-        currentDim,
-        userText,
-        userMBTI,
-        mirrorMBTI,
-        targetSymbol,
-        marketData,
-        recentHistory
-      );
-
-      setEffect("objection");
-      setTimeout(() => setEffect(null), 800);
-      await typeText(mirrorRes, "mirror");
-      const mirrorMsg: Message = { role: "mirror", content: mirrorRes };
-      setBattleState((prev) => ({ ...prev, history: [...prev.history, mirrorMsg], displayContent: "" }));
-
-      const scoreResult = await judgeScoring(userText, mirrorRes, currentDim);
-      await typeText(scoreResult.feedback, "judge");
-
-      const judgeMsg: Message = { role: "judge", content: scoreResult.feedback };
-      setBattleState((prev) => ({
-        ...prev,
-        userHP: Math.max(
-          0,
-          Math.min(100, prev.userHP + scoreResult.scoreDelta + (action === "insist" ? 5 : action === "concede" ? -15 : 0))
-        ),
-        isTakingDamage: scoreResult.scoreDelta < 0,
-        history: [...prev.history, judgeMsg],
-        displayContent: ""
-      }));
-
-      setLoading(false);
-      setTimeout(() => setBattleState((prev) => ({ ...prev, isTakingDamage: false })), 500);
+      sendMessage({ text: userText, files: [] });
     },
-    [
-      battleState.currentDimensionIndex,
-      battleState.history,
-      battleState.isTyping,
-      loading,
-      marketData,
-      mirrorMBTI,
-      selectedDims,
-      setBattleState,
-      setEffect,
-      setLoading,
-      targetSymbol,
-      typeText,
-      userMBTI
-    ]
+    [loading, selectedDims.length, sendMessage, status]
   );
 
   const handleFinalVerdict = useCallback(async () => {
@@ -187,11 +236,115 @@ export default function BattlePage() {
       await window.aistudio.openSelectKey();
     }
     setLoading(true);
-    const report = await generateFinalReport(targetSymbol, userMBTI, mirrorMBTI, battleState.userHP, battleState.history);
-    setFinalReport(report);
+    const reportPrompt = `
+根据本次辩论，输出一份最终投资决策报告（Markdown，直接正文，不要代码块）。
+标的：${targetSymbol}
+用户人格：${userMBTI}
+镜像对手：${mirrorMBTI}
+辩论简略历史（最近10条）：${JSON.stringify(chatHistory.slice(-10))}
+请包含：
+1. 盲点分析
+2. 决策建议（买/卖/调整仓位）
+3. 具体行动清单（3条）
+`.trim();
+    const resultMessages = await runAgent({
+      message: reportPrompt,
+      sessionId: getOrCreateSessionId(),
+      systemPrompt: requestPrompt,
+      profilePrompt: getCookie("spoon_profile_prompt") ?? undefined,
+      toolkits: ["profile", "crypto", "web"],
+    });
+    const report = resultMessages.map(getMessageText).join("\n");
+    setFinalReport(report || "无法生成报告。");
     setLoading(false);
     router.push("/report");
-  }, [battleState.history, battleState.userHP, loading, mirrorMBTI, router, setFinalReport, setLoading, targetSymbol, userMBTI]);
+  }, [
+    battleState.userHP,
+    chatHistory,
+    getCookie,
+    getOrCreateSessionId,
+    loading,
+    mirrorMBTI,
+    requestPrompt,
+    router,
+    setFinalReport,
+    setLoading,
+    targetSymbol,
+    userMBTI
+  ]);
+
+  const introMessage = useMemo(() => {
+    if (!selectedDims.length) return "";
+    return `庭审正式开启。被告人 ${userMBTI} 申请买入 $${targetSymbol}。控方审计员 ${mirrorMBTI} 已入场，当前维度：${selectedDims[0]}。请开始你的辩解。`;
+  }, [mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
+
+  const chatHistory = useMemo(() => {
+    const mapped: Message[] = [];
+    if (introMessage) {
+      mapped.push({ role: "system", content: introMessage });
+    }
+    for (const message of messages) {
+      const text = message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => (part as { text?: string }).text ?? "")
+        .join("");
+      if (!text.trim()) {
+        continue;
+      }
+      let role: Message["role"] = message.role === "user" ? "user" : "mirror";
+      if (message.role === "assistant") {
+        const trimmed = text.trim();
+        if (
+          trimmed.startsWith("【法官裁决】") ||
+          trimmed.startsWith("【法官旁注】")
+        ) {
+          role = "judge";
+        }
+      }
+      if (message.role === "system") {
+        role = "system";
+      }
+      mapped.push({ role, content: text });
+    }
+    return mapped;
+  }, [introMessage, messages]);
+
+  const activeSpeaker = chatHistory.length
+    ? chatHistory[chatHistory.length - 1].role
+    : "system";
+
+  useEffect(() => {
+    if (mobileTab === "chat") {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatHistory, mobileTab]);
+
+  useEffect(() => {
+    setBattleState((prev) => ({
+      ...prev,
+      history: chatHistory,
+      isTyping: status === "streaming",
+      speaker: activeSpeaker
+    }));
+  }, [activeSpeaker, chatHistory, setBattleState, status]);
+
+  useEffect(() => {
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    if (!lastAssistant) {
+      return;
+    }
+    const text = lastAssistant.parts
+      .filter((part) => part.type === "text")
+      .map((part) => (part as { text?: string }).text ?? "")
+      .join("");
+    if (text.includes("异议") || text.toUpperCase().includes("OBJECTION")) {
+      setEffect("objection");
+      const timer = window.setTimeout(() => setEffect(null), 800);
+      return () => window.clearTimeout(timer);
+    }
+  }, [messages, setEffect]);
 
   return (
     // 修改 1: h-[100dvh] 适应移动端视口，flex-col 适应手机布局
@@ -207,7 +360,7 @@ export default function BattlePage() {
         lg:relative lg:flex lg:w-auto lg:p-0 lg:z-auto
       `}>
         {/* 注意: 如果 BattleSidebar 内部有写死的宽高，可能需要去该组件微调，但这里给了 flex 容器 */}
-        <BattleSidebar userMBTI={userMBTI} mirrorMBTI={mirrorMBTI} speaker={battleState.speaker} />
+        <BattleSidebar userMBTI={userMBTI} mirrorMBTI={mirrorMBTI} speaker={activeSpeaker} />
       </div>
 
       {/* 
@@ -231,9 +384,9 @@ export default function BattlePage() {
         </div>
 
         <BattleChat
-          history={battleState.history}
-          displayContent={battleState.displayContent}
-          speaker={battleState.speaker}
+          history={chatHistory}
+          displayContent=""
+          speaker={activeSpeaker}
           chatEndRef={chatEndRef}
         />
 
@@ -247,8 +400,8 @@ export default function BattlePage() {
         )}
 
         <BattleControlPanel
-          loading={loading}
-          historyLength={battleState.history.length}
+          loading={loading || status === "streaming" || status === "submitted"}
+          historyLength={chatHistory.length}
           onQuickAction={(text) => handleAction("message", text)}
           onSubmitMessage={(text) => handleAction("message", text)}
           onFinalVerdict={handleFinalVerdict}
@@ -289,7 +442,7 @@ export default function BattlePage() {
         >
           <div className="relative">
             <MessageSquare size={20} />
-            {battleState.isTyping && (
+            {status === "streaming" && (
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
             )}
           </div>

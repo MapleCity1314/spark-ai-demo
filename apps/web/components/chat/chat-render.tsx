@@ -13,6 +13,7 @@ import { MessageAttachments } from "./chat-render-attachments";
 import { MessageQuestionnaire } from "./chat-render-questionnaire";
 import { MessageText } from "./chat-render-text";
 import { MessageTools } from "./chat-render-tools";
+import { JudgeReport } from "./judge-report";
 
 interface ChatRenderProps {
   messages: UIMessage[];
@@ -48,6 +49,20 @@ export function ChatRender({
             <Message from={message.role} key={`${message.id}-${messageIndex}`}>
               <MessageContent>
                 <MessageAttachments message={message} />
+                {message.parts
+                  .filter(
+                    (part) =>
+                      part.type === "text" &&
+                      typeof part.text === "string" &&
+                      part.text.includes("【法官裁决】"),
+                  )
+                  .map((part, index) => (
+                    <JudgeReport
+                      key={`${message.id}-judge-${index}`}
+                      text={part.text}
+                      className="mb-4"
+                    />
+                  ))}
                 <MessageText message={message} />
                 <MessageTools message={message} />
                 <MessageQuestionnaire

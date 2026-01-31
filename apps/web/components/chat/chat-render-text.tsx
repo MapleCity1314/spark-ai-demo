@@ -2,6 +2,7 @@
 
 import type { UIMessage } from "ai";
 import { MessageResponse } from "../ai-elements/message";
+import { hasJudgeReport } from "./judge-report";
 
 interface MessageTextProps {
   message: UIMessage;
@@ -14,8 +15,11 @@ const isTextPart = (part: MessagePart): part is { type: "text"; text: string } =
 
 export function MessageText({ message }: MessageTextProps) {
   const textParts = message.parts.filter(isTextPart);
+  const nonJudgeParts = textParts.filter(
+    (part) => !hasJudgeReport(part.text),
+  );
 
-  if (textParts.length === 0) {
+  if (nonJudgeParts.length === 0) {
     if (message.role !== "assistant") {
       return null;
     }
@@ -39,7 +43,7 @@ export function MessageText({ message }: MessageTextProps) {
 
   return (
     <>
-      {textParts.map((part, index) => {
+      {nonJudgeParts.map((part, index) => {
         const text = part.text;
         if (text.includes("问卷作答：")) {
           const choiceMatch = text.match(/choice_text=([^,]+)/);

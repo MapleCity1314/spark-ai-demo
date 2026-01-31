@@ -44,6 +44,7 @@ try:
         RiskAnalysisTool,
         SocialSentimentTool,
         TargetAnalysisTool,
+        TechnicalAnalysisTool,
         VolatilityTool,
         SentimentTool,
     )
@@ -54,6 +55,7 @@ except Exception:  # pragma: no cover - optional toolkit
     RiskAnalysisTool = None
     SocialSentimentTool = None
     TargetAnalysisTool = None
+    TechnicalAnalysisTool = None
     VolatilityTool = None
     SentimentTool = None
 
@@ -78,6 +80,7 @@ TOOLKIT_REGISTRY: Dict[str, Any] = {
             SentimentTool,
             SocialSentimentTool,
             TargetAnalysisTool,
+            TechnicalAnalysisTool,
             VolatilityTool,
             RiskAnalysisTool,
             EcosystemTool,

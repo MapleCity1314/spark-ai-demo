@@ -54,6 +54,7 @@ RETTIWT_KOL_ACCOUNTS = [
     if name.strip()
 ]
 BINANCE_BASE_URL = _get_env("BINANCE_BASE_URL", "https://api.binance.com")
+BINANCE_FUTURES_BASE_URL = _get_env("BINANCE_FUTURES_BASE_URL", "https://fapi.binance.com")
 DEFILLAMA_BASE_URL = _get_env("DEFILLAMA_BASE_URL", "https://api.llama.fi")
 
 
@@ -92,6 +93,16 @@ async def _binance_get(path: str, params: Optional[dict] = None) -> Any:
     if httpx is None:
         raise RuntimeError("httpx is not installed. Install deps and retry.")
     url = f"{BINANCE_BASE_URL.rstrip('/')}/{path.lstrip('/')}"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(url, params=params or {})
+        response.raise_for_status()
+        return response.json()
+
+
+async def _binance_futures_get(path: str, params: Optional[dict] = None) -> Any:
+    if httpx is None:
+        raise RuntimeError("httpx is not installed. Install deps and retry.")
+    url = f"{BINANCE_FUTURES_BASE_URL.rstrip('/')}/{path.lstrip('/')}"
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(url, params=params or {})
         response.raise_for_status()
@@ -402,6 +413,74 @@ def _risk_level(volatility_pct: Optional[float]) -> str:
     if volatility_pct < 4.0:
         return "medium"
     return "high"
+
+
+def _bollinger(values: List[float], period: int = 20, std_mult: float = 2.0) -> Dict[str, Optional[float]]:
+    if len(values) < period:
+        return {"upper": None, "middle": None, "lower": None}
+    middle = _sma(values, period)
+    window = values[-period:]
+    std = _std(window)
+    if middle is None or std is None:
+        return {"upper": None, "middle": None, "lower": None}
+    upper = middle + std_mult * std
+    lower = middle - std_mult * std
+    return {"upper": round(upper, 6), "middle": round(middle, 6), "lower": round(lower, 6)}
+
+
+def _support_resistance_from_prices(values: List[float]) -> Dict[str, Optional[float]]:
+    if not values:
+        return {"support": None, "resistance": None}
+    return {"support": min(values), "resistance": max(values)}
+
+
+def _depth_levels(orderbook: Dict[str, Any], side: str = "bids", top_n: int = 5) -> List[Dict[str, float]]:
+    levels = []
+    rows = orderbook.get(side, []) if isinstance(orderbook, dict) else []
+    for row in rows[:top_n]:
+        try:
+            price = float(row[0])
+            qty = float(row[1])
+        except Exception:
+            continue
+        levels.append({"price": price, "qty": qty})
+    return levels
+
+
+def _trade_flow(trades: List[Dict[str, Any]], min_notional: float) -> Dict[str, Any]:
+    large = []
+    buy_notional = 0.0
+    sell_notional = 0.0
+    for trade in trades:
+        try:
+            price = float(trade.get("price"))
+            qty = float(trade.get("qty"))
+        except Exception:
+            continue
+        notional = price * qty
+        if notional < min_notional:
+            continue
+        is_buyer_maker = trade.get("isBuyerMaker")
+        side = "sell" if is_buyer_maker else "buy"
+        if side == "buy":
+            buy_notional += notional
+        else:
+            sell_notional += notional
+        large.append(
+            {
+                "price": price,
+                "qty": qty,
+                "notional": round(notional, 4),
+                "side": side,
+                "time": trade.get("time"),
+            }
+        )
+    return {
+        "large_trades": large,
+        "buy_notional": round(buy_notional, 4),
+        "sell_notional": round(sell_notional, 4),
+        "net_notional": round(buy_notional - sell_notional, 4),
+    }
 
 
 def _pick_protocol(protocols: List[Dict[str, Any]], symbol: str) -> Optional[Dict[str, Any]]:
@@ -855,7 +934,7 @@ if BaseTool:
             }
 
 
-class TargetAnalysisTool(BaseTool):
+    class TargetAnalysisTool(BaseTool):
         """PnL, targets, R:R, scaling plan, rebalance suggestion."""
 
         name: str = "get_target_analysis"
@@ -917,7 +996,6 @@ class TargetAnalysisTool(BaseTool):
             vol = vol_data.get("volatility", {})
             risk_level = vol.get("risk_level")
 
-            # Stop loss based on cost price
             stop_loss = avg_cost * (1 - stop_loss_pct)
             risk_distance = max(avg_cost - stop_loss, 0.0)
 
@@ -936,7 +1014,6 @@ class TargetAnalysisTool(BaseTool):
             target2 = avg_cost + risk_distance * (rr_ratio * rr_multipliers[1])
             target3 = avg_cost + risk_distance * (rr_ratio * rr_multipliers[2])
 
-            # Adjust targets if they are too close to resistance (exit slightly before)
             if resistance:
                 def _adjust(target: float) -> float:
                     if resistance and abs(target - resistance) / resistance < 0.02:
@@ -1011,22 +1088,21 @@ class TargetAnalysisTool(BaseTool):
 
 
     class OnChainTool(BaseTool):
-        """链上数据：流动性、大户地址（MVP可选）"""
+        """??????????????MVP???"""
 
         name: str = "get_onchain_data"
-        description: str = "获取链上数据。"
+        description: str = "???????"
         parameters: dict = _tool_schema(
             {
                 "symbol": {
                     "type": "string",
-                    "description": "Token symbol，比如 BTC, ETH.",
+                    "description": "Token symbol??? BTC, ETH.",
                 },
             },
             required=["symbol"],
         )
 
         async def execute(self, symbol: str) -> Dict[str, Any]:
-            # 返回链上数据（流动性、大户地址等）
             symbol = symbol.upper()
             return {
                 "symbol": symbol,
@@ -1036,6 +1112,8 @@ class TargetAnalysisTool(BaseTool):
                 "whale_addresses": int(_score(symbol, "whales", 10, 2000)),
                 "net_flow_24h": _score(symbol, "net_flow", -1e9, 1e9),
             }
+
+
     class VolatilityTool(BaseTool):
         """Max drawdown (CoinGecko) + volatility/sharpe/beta (Binance)."""
 
@@ -1171,6 +1249,168 @@ class TargetAnalysisTool(BaseTool):
             return payload
 
 
+    class TechnicalAnalysisTool(BaseTool):
+        """Trend, momentum, volatility, and key levels (Binance)."""
+
+        name: str = "get_technical_analysis"
+        description: str = "Compute MA/EMA, RSI, MACD, Bollinger, support/resistance, and flow."
+        parameters: dict = _tool_schema(
+            {
+                "symbol": {"type": "string", "description": "Token symbol, e.g., BTC, ETH."},
+                "interval": {"type": "string", "description": "Kline interval, e.g., 1m, 5m, 1h."},
+                "limit": {"type": "number", "description": "Kline limit (max 1000)."},
+                "depth_limit": {"type": "number", "description": "Order book depth limit."},
+                "trade_limit": {"type": "number", "description": "Recent trades limit."},
+                "big_trade_usd": {"type": "number", "description": "Large trade notional threshold in USD."},
+            },
+            required=["symbol"],
+        )
+
+        async def execute(
+            self,
+            symbol: str,
+            interval: str = "1h",
+            limit: int = 200,
+            depth_limit: int = 100,
+            trade_limit: int = 200,
+            big_trade_usd: float = 100000.0,
+        ) -> Dict[str, Any]:
+            if httpx is None:
+                raise RuntimeError("httpx is not installed. Install deps and retry.")
+
+            symbol = symbol.upper()
+            limit = max(50, min(int(limit), 1000))
+            depth_limit = max(5, min(int(depth_limit), 1000))
+            trade_limit = max(10, min(int(trade_limit), 1000))
+            big_trade_usd = max(0.0, float(big_trade_usd))
+
+            binance_symbol = symbol if symbol.endswith("USDT") else f"{symbol}USDT"
+
+            klines = await _binance_get(
+                "/api/v3/klines",
+                params={"symbol": binance_symbol, "interval": interval, "limit": limit},
+            )
+            closes = [float(item[4]) for item in klines if isinstance(item, list) and len(item) > 4]
+            current_price = closes[-1] if closes else None
+
+            ma_20 = _sma(closes, 20)
+            ma_50 = _sma(closes, 50)
+            ema_20 = _ema(closes, 20)
+            ema_50 = _ema(closes, 50)
+            ema_20_val = round(ema_20[-1], 6) if ema_20 else None
+            ema_50_val = round(ema_50[-1], 6) if ema_50 else None
+
+            trend = None
+            if ma_20 is not None and ma_50 is not None:
+                if ma_20 > ma_50:
+                    trend = "up"
+                elif ma_20 < ma_50:
+                    trend = "down"
+                else:
+                    trend = "flat"
+
+            rsi_14 = _rsi(closes, 14)
+            rsi_state = None
+            if rsi_14 is not None:
+                if rsi_14 >= 70:
+                    rsi_state = "overbought"
+                elif rsi_14 <= 30:
+                    rsi_state = "oversold"
+                else:
+                    rsi_state = "neutral"
+
+            macd = _macd(closes)
+            macd_state = None
+            if macd.get("macd") is not None and macd.get("signal") is not None:
+                macd_state = "bullish" if macd["macd"] > macd["signal"] else "bearish"
+
+            boll = _bollinger(closes, 20, 2.0)
+            boll_state = None
+            boll_pos = None
+            if current_price is not None and boll["upper"] and boll["lower"]:
+                if current_price > boll["upper"]:
+                    boll_state = "overheated"
+                elif current_price < boll["lower"]:
+                    boll_state = "oversold"
+                else:
+                    boll_state = "normal"
+                denom = boll["upper"] - boll["lower"]
+                if denom:
+                    boll_pos = round((current_price - boll["lower"]) / denom, 4)
+
+            price_levels = _support_resistance_from_prices(closes[-90:] if len(closes) >= 90 else closes)
+
+            orderbook = await _binance_get(
+                "/api/v3/depth",
+                params={"symbol": binance_symbol, "limit": depth_limit},
+            )
+            bids = _depth_levels(orderbook, "bids", 5)
+            asks = _depth_levels(orderbook, "asks", 5)
+            best_bid = bids[0]["price"] if bids else None
+            best_ask = asks[0]["price"] if asks else None
+
+            trades = await _binance_get(
+                "/api/v3/trades",
+                params={"symbol": binance_symbol, "limit": trade_limit},
+            )
+            flow = _trade_flow(trades, big_trade_usd)
+
+            funding_rate = None
+            try:
+                fr = await _binance_futures_get(
+                    "/fapi/v1/fundingRate",
+                    params={"symbol": binance_symbol, "limit": 1},
+                )
+                if isinstance(fr, list) and fr:
+                    funding_rate = fr[-1]
+            except Exception:
+                funding_rate = None
+
+            combined_support = best_bid if best_bid is not None else price_levels.get("support")
+            combined_resistance = best_ask if best_ask is not None else price_levels.get("resistance")
+
+            return {
+                "symbol": symbol,
+                "as_of": _iso_now(),
+                "source": {
+                    "binance": BINANCE_BASE_URL,
+                    "binance_futures": BINANCE_FUTURES_BASE_URL,
+                },
+                "trend": {
+                    "ma_20": ma_20,
+                    "ma_50": ma_50,
+                    "ema_20": ema_20_val,
+                    "ema_50": ema_50_val,
+                    "direction": trend,
+                },
+                "momentum": {
+                    "rsi_14": rsi_14,
+                    "state": rsi_state,
+                },
+                "trend_confirmation": {
+                    "macd": macd,
+                    "state": macd_state,
+                },
+                "volatility": {
+                    "bollinger": boll,
+                    "state": boll_state,
+                    "position": boll_pos,
+                },
+                "support_resistance": {
+                    "from_price": price_levels,
+                    "from_orderbook": {"bids": bids, "asks": asks},
+                    "combined": {"support": combined_support, "resistance": combined_resistance},
+                },
+                "orderbook_depth": {
+                    "best_bid": best_bid,
+                    "best_ask": best_ask,
+                    "bids": bids,
+                    "asks": asks,
+                },
+                "large_trade_flow": flow,
+                "funding_rate": funding_rate,
+            }
+
 
 else:
         MarketDataTool = None
@@ -1180,3 +1420,4 @@ else:
         OnChainTool = None
         SocialSentimentTool = None
         VolatilityTool = None
+        TechnicalAnalysisTool = None

@@ -7,7 +7,7 @@ interface BattleChatProps {
   history: Message[];
   displayContent: string;
   speaker: 'user' | 'mirror' | 'judge' | 'system';
-  chatEndRef: React.RefObject<HTMLDivElement>;
+  chatEndRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const BattleChat: React.FC<BattleChatProps> = ({ history, displayContent, speaker, chatEndRef }) => {

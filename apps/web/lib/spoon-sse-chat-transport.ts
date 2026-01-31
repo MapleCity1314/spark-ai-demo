@@ -175,7 +175,7 @@ const parseSseToUiMessageStream = (
 
 export class SpoonSseChatTransport<UI_MESSAGE extends UIMessage>
   implements ChatTransport<UI_MESSAGE>
-{
+   {
   private readonly baseUrl: string;
   private readonly getBody?: () => Record<string, unknown>;
   private readonly fetchImpl: typeof fetch;
@@ -183,7 +183,7 @@ export class SpoonSseChatTransport<UI_MESSAGE extends UIMessage>
   constructor({ baseUrl, getBody, fetchImpl }: SpoonSseChatTransportOptions) {
     this.baseUrl = baseUrl;
     this.getBody = getBody;
-    this.fetchImpl = fetchImpl ?? fetch;
+    this.fetchImpl = fetchImpl ?? fetch.bind(window);
   }
 
   async sendMessages({

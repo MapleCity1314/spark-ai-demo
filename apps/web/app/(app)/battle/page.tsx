@@ -229,7 +229,44 @@ export default function BattlePage() {
     [loading, selectedDims.length, sendMessage, status]
   );
 
-  const handleFinalVerdict = useCallback(async () => {
+
+  const introMessage = useMemo(() => {
+    if (!selectedDims.length) return "";
+    return `庭审正式开启。被告人 ${userMBTI} 申请买入 $${targetSymbol}。控方审计员 ${mirrorMBTI} 已入场，当前维度：${selectedDims[0]}。请开始你的辩解。`;
+  }, [mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
+
+  const chatHistory = useMemo(() => {
+    const mapped: Message[] = [];
+    if (introMessage) {
+      mapped.push({ role: "system", content: introMessage });
+    }
+    for (const message of messages) {
+      const text = message.parts
+        .filter((part) => part.type === "text")
+        .map((part) => (part as { text?: string }).text ?? "")
+        .join("");
+      if (!text.trim()) {
+        continue;
+      }
+      let role: Message["role"] = message.role === "user" ? "user" : "mirror";
+      if (message.role === "assistant") {
+        const trimmed = text.trim();
+        if (
+          trimmed.startsWith("【法官裁决】") ||
+          trimmed.startsWith("【法官旁注】")
+        ) {
+          role = "judge";
+        }
+      }
+      if (message.role === "system") {
+        role = "system";
+      }
+      mapped.push({ role, content: text });
+    }
+    return mapped;
+  }, [introMessage, messages]);
+
+    const handleFinalVerdict = useCallback(async () => {
     if (loading) return;
     const hasKey = await window.aistudio.hasSelectedApiKey();
     if (!hasKey) {
@@ -272,42 +309,6 @@ export default function BattlePage() {
     targetSymbol,
     userMBTI
   ]);
-
-  const introMessage = useMemo(() => {
-    if (!selectedDims.length) return "";
-    return `庭审正式开启。被告人 ${userMBTI} 申请买入 $${targetSymbol}。控方审计员 ${mirrorMBTI} 已入场，当前维度：${selectedDims[0]}。请开始你的辩解。`;
-  }, [mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
-
-  const chatHistory = useMemo(() => {
-    const mapped: Message[] = [];
-    if (introMessage) {
-      mapped.push({ role: "system", content: introMessage });
-    }
-    for (const message of messages) {
-      const text = message.parts
-        .filter((part) => part.type === "text")
-        .map((part) => (part as { text?: string }).text ?? "")
-        .join("");
-      if (!text.trim()) {
-        continue;
-      }
-      let role: Message["role"] = message.role === "user" ? "user" : "mirror";
-      if (message.role === "assistant") {
-        const trimmed = text.trim();
-        if (
-          trimmed.startsWith("【法官裁决】") ||
-          trimmed.startsWith("【法官旁注】")
-        ) {
-          role = "judge";
-        }
-      }
-      if (message.role === "system") {
-        role = "system";
-      }
-      mapped.push({ role, content: text });
-    }
-    return mapped;
-  }, [introMessage, messages]);
 
   const activeSpeaker = chatHistory.length
     ? chatHistory[chatHistory.length - 1].role

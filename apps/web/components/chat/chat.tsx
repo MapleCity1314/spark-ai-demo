@@ -70,7 +70,7 @@ export function Chat({
       api: "/api/chat",
       body: () => ({
         profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
-        toolkits: ["profile"],
+        toolkits: ["profile", "crypto"],
       }),
       fetch: fetchWithErrorHandlers,
     }),

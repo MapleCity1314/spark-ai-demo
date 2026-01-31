@@ -10,13 +10,14 @@ export interface Persona {
 
 export type Dimension = 'Why' | 'When' | 'How Much' | 'What If' | 'Exit';
 
-export interface BattleState {
+export interface BattleViewState {
   userHP: number;
-  mirrorHP: number;
   currentDimensionIndex: number;
-  selectedDimensions: Dimension[];
   history: Message[];
-  status: 'assessment' | 'setup' | 'battle' | 'report';
+  displayContent: string;
+  isTyping: boolean;
+  speaker: 'user' | 'mirror' | 'judge' | 'system';
+  isTakingDamage: boolean;
 }
 
 export interface Message {

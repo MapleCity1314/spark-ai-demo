@@ -76,6 +76,8 @@ export const DIMENSIONS: { key: Dimension; title: string; desc: string }[] = [
   { key: 'Exit', title: 'Exit / 退出策略', desc: '什么时候卖？目标明确吗' }
 ];
 
+export const HOT_TOKENS = ['SOL', 'BTC', 'ETH', 'PEPE', 'DOGE', 'PUMP'];
+
 export const MBTI_MAP: Record<MBTI, { name: string; style: string }> = {
   'INTJ': { name: '建筑师', style: '冷静数据型：追求逻辑严密，极度理智' },
   'ENTJ': { name: '指挥官', style: '果断领导型：目标导向，高效执行' },

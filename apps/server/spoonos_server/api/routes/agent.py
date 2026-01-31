@@ -3,7 +3,7 @@ import uuid
 from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from spoonos_server.core.agents.react_agent import (
     create_react_agent,
@@ -80,3 +80,40 @@ async def stream_agent(request: StreamRequest) -> StreamingResponse:
 
     media_type = "text/event-stream" if request.stream_mode == "sse" else "text/plain"
     return StreamingResponse(event_stream(), media_type=media_type)
+
+
+@router.post("/v1/agent")
+async def run_agent(request: StreamRequest) -> JSONResponse:
+    if not request.message and not request.messages:
+        raise HTTPException(status_code=400, detail="message or messages required.")
+
+    session_id = request.session_id or str(uuid.uuid4())
+    if request.messages:
+        _merge_messages(session_id, request.messages)
+
+    user_message = (
+        request.message
+        if request.message
+        else request.messages[-1].content  # type: ignore[index]
+    )
+
+    agent = create_react_agent(
+        config=config,
+        system_prompt=request.system_prompt,
+        profile_prompt=request.profile_prompt,
+        session_id=request.session_id,
+        provider=request.provider,
+        model=request.model,
+        toolkits=request.toolkits,
+        mcp_enabled=request.mcp_enabled,
+        sub_agents=request.sub_agents,
+    )
+
+    events: List[Dict[str, object]] = []
+    async for event in stream_agent_events(agent, user_message, request.timeout):
+        payload = json.loads(
+            json.dumps(event, ensure_ascii=False, default=_json_default)
+        )
+        events.append(payload)
+
+    return JSONResponse({"events": events})

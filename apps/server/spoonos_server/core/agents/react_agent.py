@@ -75,7 +75,9 @@ def create_react_agent(
         else "(none)"
     )
 
-    prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+    prompt = DEFAULT_SYSTEM_PROMPT
+    if system_prompt:
+        prompt = f"{prompt}\n\nUser request prompt:\n{system_prompt.strip()}"
     if profile_prompt:
         prompt = f"{prompt}\n\nUser profile context:\n{profile_prompt.strip()}"
     prompt = (

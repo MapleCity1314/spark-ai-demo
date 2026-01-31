@@ -1,1 +1,5 @@
-"""Toolkits and tool loaders."""
+"""Tools and toolkits."""
+
+from .decorator import tool  
+
+__all__ = ["tool"]

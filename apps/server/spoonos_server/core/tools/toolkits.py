@@ -37,6 +37,21 @@ except Exception:  # pragma: no cover - optional toolkit
     MBTIProfileCreateTool = None
 
 try:
+    from spoonos_server.core.tools.crypto_tools import (
+        EcosystemTool,
+        MarketDataTool,
+        SocialSentimentTool,
+        TargetAnalysisTool,
+        TechnicalAnalysisTool,
+        VolatilityTool,
+    )
+except Exception:  # pragma: no cover - optional toolkit
+    EcosystemTool = None
+    MarketDataTool = None
+    SocialSentimentTool = None
+    TargetAnalysisTool = None
+    TechnicalAnalysisTool = None
+    VolatilityTool = None
     from spoonos_server.core.tools.mbti_questionnaire_tools import (
         MBTITraderQuestionnaireTool,
         MBTITraderQuestionnaireNextTool,
@@ -58,6 +73,16 @@ TOOLKIT_REGISTRY: Dict[str, Any] = {
         for tool in (EchoTool, JsonRenderTool, DelayTool, ErrorTool)
         if tool
     ],
+    "profile": lambda: [MBTIProfileCreateTool()] if MBTIProfileCreateTool else [],
+    "crypto": lambda: [
+        tool()
+        for tool in (
+            MarketDataTool,
+            SocialSentimentTool,
+            TargetAnalysisTool,
+            TechnicalAnalysisTool,
+            VolatilityTool,
+            EcosystemTool,
     "profile": lambda: [
         tool()
         for tool in (

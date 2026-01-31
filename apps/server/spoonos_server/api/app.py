@@ -5,8 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from spoonos_server.api.routes import agent, health, openai, profile
 
+from spoonos_server.api.routes import upload
 
 app = FastAPI(title="SpoonOS API")
+app.include_router(upload.router, prefix="/api", tags=["upload"])
 cors_origins_env = os.getenv("SPOONOS_CORS_ORIGINS", "*")
 cors_origins = (
     ["*"]

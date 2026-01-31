@@ -1,5 +1,10 @@
 from pathlib import Path
 from typing import Dict, List
+from spoonos_server.core.skills.investment_profiler.tools import (
+    analyze_user_profile, 
+    generate_investment_quiz
+)
+
 
 
 def load_skill_index(root: Path) -> Dict[str, List[str]]:
@@ -14,3 +19,8 @@ def load_skill_index(root: Path) -> Dict[str, List[str]]:
         if skill_file.exists():
             skills[skill_dir.name] = [str(skill_file)]
     return skills
+
+TOOLS = [
+    analyze_user_profile,
+    generate_investment_quiz,
+]

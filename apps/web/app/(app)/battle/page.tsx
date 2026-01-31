@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MessageSquare, Activity, User, AlertTriangle } from "lucide-react"; // 引入图标用于移动端导航
 
 import HPBar from "../components/hp-bar";
 import BattleHeader from "../components/battle/battle-header";
@@ -18,8 +19,13 @@ import {
 } from "../services/geminiService";
 import { Message } from "../types";
 
+// 定义移动端选项卡类型
+type MobileTab = "chat" | "status" | "market";
+
 export default function BattlePage() {
   const router = useRouter();
+  
+  // Store hooks
   const battleState = useAppStore((state) => state.battleState);
   const selectedDims = useAppStore((state) => state.selectedDims);
   const targetSymbol = useAppStore((state) => state.targetSymbol);
@@ -28,7 +34,9 @@ export default function BattlePage() {
   const marketData = useAppStore((state) => state.marketData);
   const loading = useAppStore((state) => state.loading);
   const effect = useAppStore((state) => state.effect);
-  const activeTab = useAppStore((state) => state.activeTab);
+  const activeTab = useAppStore((state) => state.activeTab); // 这是 MarketPanel 内部的 tab
+  
+  // Actions
   const setBattleState = useAppStore((state) => state.setBattleState);
   const setMarketData = useAppStore((state) => state.setMarketData);
   const setLoading = useAppStore((state) => state.setLoading);
@@ -40,9 +48,15 @@ export default function BattlePage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
 
+  // 新增: 移动端当前显示的 Tab，默认为聊天
+  const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [battleState.history, battleState.displayContent]);
+    // 聊天更新时自动滚动
+    if (mobileTab === "chat") {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [battleState.history, battleState.displayContent, mobileTab]);
 
   useEffect(() => {
     return () => {
@@ -180,10 +194,31 @@ export default function BattlePage() {
   }, [battleState.history, battleState.userHP, loading, mirrorMBTI, router, setFinalReport, setLoading, targetSymbol, userMBTI]);
 
   return (
-    <div className="w-full h-full flex overflow-hidden bg-[#05050a]">
-      <BattleSidebar userMBTI={userMBTI} mirrorMBTI={mirrorMBTI} speaker={battleState.speaker} />
+    // 修改 1: h-[100dvh] 适应移动端视口，flex-col 适应手机布局
+    <div className="w-full h-[100dvh] flex flex-col lg:flex-row overflow-hidden bg-[#05050a] relative">
+      
+      {/* 
+         左侧栏 (Status/Sidebar) 
+         手机端: 只有 mobileTab === 'status' 时显示
+         桌面端: 始终显示 (hidden lg:flex)
+      */}
+      <div className={`
+        ${mobileTab === 'status' ? 'flex w-full absolute inset-0 z-40 bg-[#05050a] p-4 pt-20 overflow-y-auto' : 'hidden'} 
+        lg:relative lg:flex lg:w-auto lg:p-0 lg:z-auto
+      `}>
+        {/* 注意: 如果 BattleSidebar 内部有写死的宽高，可能需要去该组件微调，但这里给了 flex 容器 */}
+        <BattleSidebar userMBTI={userMBTI} mirrorMBTI={mirrorMBTI} speaker={battleState.speaker} />
+      </div>
 
-      <div className="flex-1 flex flex-col bg-[#0a0a15] relative border-r-4 border-slate-800">
+      {/* 
+         中间主栏 (Chat)
+         手机端: 只有 mobileTab === 'chat' 时显示 (flex)
+         桌面端: 始终显示 (flex-1)
+      */}
+      <div className={`
+        flex-1 flex-col bg-[#0a0a15] relative border-r-0 lg:border-r-4 border-slate-800
+        ${mobileTab === 'chat' ? 'flex' : 'hidden lg:flex'}
+      `}>
         <BattleHeader
           targetSymbol={targetSymbol}
           onAbort={() => {
@@ -191,7 +226,7 @@ export default function BattlePage() {
           }}
         />
 
-        <div className="bg-[#05050a] border-b border-slate-800 pt-6 pb-2">
+        <div className="bg-[#05050a] border-b border-slate-800 pt-4 pb-2 px-2">
           <HPBar userHP={battleState.userHP} userName={userMBTI} mirrorName={mirrorMBTI} />
         </div>
 
@@ -204,7 +239,8 @@ export default function BattlePage() {
 
         {effect === "objection" && (
           <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-            <div className="bg-red-600 border-[8px] border-yellow-400 text-white font-arcade p-8 rotate-[-10deg] animate-bounce text-4xl shadow-[12px_12px_0_#000] pixel-text-shadow">
+            {/* 动画字体稍微适配手机 */}
+            <div className="bg-red-600 border-[4px] md:border-[8px] border-yellow-400 text-white font-arcade p-4 md:p-8 rotate-[-10deg] animate-bounce text-2xl md:text-4xl shadow-[8px_8px_0_#000] md:shadow-[12px_12px_0_#000] pixel-text-shadow">
               异议 OBJECTION!
             </div>
           </div>
@@ -217,9 +253,58 @@ export default function BattlePage() {
           onSubmitMessage={(text) => handleAction("message", text)}
           onFinalVerdict={handleFinalVerdict}
         />
+        
+        {/* 移动端底部垫高，防止内容被导航栏遮挡 */}
+        <div className="h-16 lg:hidden shrink-0" /> 
       </div>
 
-      <MarketPanel marketData={marketData} activeTab={activeTab} onTabChange={setActiveTab} />
+      {/* 
+         右侧栏 (Market)
+         手机端: 只有 mobileTab === 'market' 时显示
+         桌面端: 始终显示 (hidden lg:flex)
+      */}
+      <div className={`
+        ${mobileTab === 'market' ? 'flex w-full absolute inset-0 z-40 bg-[#05050a] p-4 pt-20 overflow-y-auto' : 'hidden'} 
+        lg:relative lg:flex lg:w-auto lg:p-0 lg:z-auto
+      `}>
+        <MarketPanel marketData={marketData} activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+
+      {/* 
+         移动端底部导航栏 (新增)
+         只在屏幕 < lg (1024px) 时显示
+      */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#05050a] border-t-2 border-slate-800 flex items-center justify-around z-50 pb-safe">
+        <button 
+          onClick={() => setMobileTab("status")}
+          className={`flex flex-col items-center justify-center gap-1 p-2 ${mobileTab === 'status' ? 'text-yellow-400' : 'text-slate-500'}`}
+        >
+          <User size={20} />
+          <span className="text-[10px] font-arcade uppercase">STATUS</span>
+        </button>
+        
+        <button 
+          onClick={() => setMobileTab("chat")}
+          className={`flex flex-col items-center justify-center gap-1 p-2 ${mobileTab === 'chat' ? 'text-cyan-400' : 'text-slate-500'}`}
+        >
+          <div className="relative">
+            <MessageSquare size={20} />
+            {battleState.isTyping && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+            )}
+          </div>
+          <span className="text-[10px] font-arcade uppercase">BATTLE</span>
+        </button>
+        
+        <button 
+          onClick={() => setMobileTab("market")}
+          className={`flex flex-col items-center justify-center gap-1 p-2 ${mobileTab === 'market' ? 'text-green-400' : 'text-slate-500'}`}
+        >
+          <Activity size={20} />
+          <span className="text-[10px] font-arcade uppercase">DATA</span>
+        </button>
+      </div>
+
     </div>
   );
 }

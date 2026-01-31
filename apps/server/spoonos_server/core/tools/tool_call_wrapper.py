@@ -14,13 +14,19 @@ if BaseTool:
             self,
             tool: Any,
             emit: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+            context: Optional[Dict[str, Any]] = None,
         ) -> None:
-            super().__init__()
+            name = getattr(tool, "name", tool.__class__.__name__)
+            description = getattr(tool, "description", "") or ""
+            parameters = getattr(tool, "parameters", {}) or {}
+            super().__init__(
+                name=name,
+                description=description,
+                parameters=parameters,
+            )
             self._tool = tool
             self._emit = emit
-            self.name = getattr(tool, "name", tool.__class__.__name__)
-            self.description = getattr(tool, "description", "") or ""
-            self.parameters = getattr(tool, "parameters", {}) or {}
+            self._context = context or {}
 
         def set_emit(
             self, emit: Optional[Callable[[Dict[str, Any]], Awaitable[None]]]
@@ -56,6 +62,8 @@ if BaseTool:
             await self._emit(ai_message)
 
         async def execute(self, **kwargs: Any) -> Any:
+            if "session_id" in self._context and "session_id" not in kwargs:
+                kwargs["session_id"] = self._context["session_id"]
             tool_call_id = str(uuid.uuid4())
             input_payload = {"description": self.description, **kwargs}
             await self._emit_tool_message(
@@ -86,6 +94,7 @@ else:
 
 def wrap_tools_for_calls(
     tools: List[Any],
+    context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Any], List[Any]]:
     if not ToolCallWrapper:
         return tools, []
@@ -96,7 +105,7 @@ def wrap_tools_for_calls(
         if getattr(tool, "skip_toolcall_wrap", False):
             wrapped.append(tool)
             continue
-        wrapper = ToolCallWrapper(tool)
+        wrapper = ToolCallWrapper(tool, context=context)
         wrapped.append(wrapper)
         wrappers.append(wrapper)
     return wrapped, wrappers

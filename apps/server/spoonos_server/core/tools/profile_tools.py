@@ -39,6 +39,10 @@ if BaseTool:
                     "type": "string",
                     "description": "生成画像时的简要说明或备注（可选）。",
                 },
+                "session_id": {
+                    "type": "string",
+                    "description": "会话 ID（可选，忽略）。",
+                },
             },
             required=["profile"],
         )
@@ -49,7 +53,9 @@ if BaseTool:
             questionnaire_data: Optional[Dict[str, Any]] = None,
             profile_prompt: Optional[str] = None,
             notes: Optional[str] = None,
+            session_id: Optional[str] = None,
         ) -> Dict[str, Any]:
+            _ = session_id
             payload = {
                 "profile": profile,
                 "questionnaire_data": questionnaire_data or {},

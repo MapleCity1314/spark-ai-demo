@@ -1,12 +1,14 @@
 "use client";
 
-import { UIMessage, DefaultChatTransport } from "ai";
+import { UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { cn, fetchWithErrorHandlers } from "@/lib/utils";
-import { useEffect, useRef } from "react";
+import { nanoid } from "nanoid";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChatInput } from "./chat-input";
 import { ChatRender } from "./chat-render";
+import { SpoonSseChatTransport } from "@/lib/spoon-sse-chat-transport";
 
 interface ChatProps {
   initialMessage?: UIMessage;
@@ -31,7 +33,6 @@ export function Chat({
   const params = useParams<{ id?: string }>();
   const searchParams = useSearchParams();
   const hasAppendedQueryRef = useRef(false);
-  const handledProfileIdsRef = useRef<Set<string>>(new Set());
 
   const seedMessages =
     initialMessages ?? (initialMessage ? [initialMessage] : []);
@@ -56,6 +57,22 @@ export function Chat({
     )}; path=/; max-age=${maxAge}`;
   };
 
+  const getOrCreateSessionId = () => {
+    const existing = getCookie("spoon_session_id");
+    if (existing) {
+      return existing;
+    }
+    const next = nanoid();
+    setCookie("spoon_session_id", next);
+    return next;
+  };
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
   const {
     messages,
     setMessages,
@@ -66,13 +83,16 @@ export function Chat({
     addToolOutput,
   } = useChat({
     messages: seedMessages,
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      body: () => ({
+    transport: new SpoonSseChatTransport({
+      baseUrl:
+        process.env.NEXT_PUBLIC_SPOONOS_API_BASE_URL ??
+        "http://localhost:8000",
+      getBody: () => ({
         profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
-        toolkits: ["profile", "crypto"],
+        toolkits: webSearchEnabled ? ["profile", "crypto","web"] : ["profile","crypto"],
+        session_id: getOrCreateSessionId(),
       }),
-      fetch: fetchWithErrorHandlers,
+      fetchImpl: fetchWithErrorHandlers,
     }),
     onError: (error) => {
       console.error("Chat error:", error);
@@ -82,6 +102,9 @@ export function Chat({
   const query = searchParams.get("query") ?? searchParams.get("q") ?? undefined;
   const chatId = params?.id;
   const hasMessages = messages.length > 0;
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+  const [pendingQuestionId, setPendingQuestionId] = useState<string | null>(null);
+  const lastAnswerKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (query && !hasAppendedQueryRef.current) {
@@ -94,71 +117,46 @@ export function Chat({
   }, [query, sendMessage, chatId, router]);
 
   useEffect(() => {
-    const profileOutputs = messages.flatMap((message) =>
-      message.parts
-        .filter((part) => part.type === "tool-mbti_profile_create")
-        .map((part) => part as { output?: unknown; state?: string }),
-    );
+    const toolParts = messages
+      .flatMap((message) => message.parts)
+      .filter(
+        (part) =>
+          (part.type === "tool-mbti_trader_questionnaire" ||
+            part.type === "tool-mbti_trader_questionnaire_next") &&
+          (part as { output?: unknown }).output,
+      )
+      .map((part) => part as { output?: unknown });
 
-    const handleProfile = async (output: unknown) => {
-      if (!output || typeof output !== "object") {
-        return;
-      }
-      const record = output as {
-        profile_id?: string;
-        profileId?: string;
-        profile?: unknown;
-        profile_prompt?: string;
-      };
-      const profileId = record.profile_id ?? record.profileId;
-      if (!profileId || handledProfileIdsRef.current.has(profileId)) {
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/profile/${profileId}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          return;
-        }
-        const data = (await response.json()) as {
-          profile_id?: string;
-          profile?: unknown;
-          profile_prompt?: string;
-        };
-        if (!data.profile_id) {
-          return;
-        }
-        handledProfileIdsRef.current.add(data.profile_id);
-        if (data.profile_prompt) {
-          setCookie("spoon_profile_prompt", data.profile_prompt);
-        }
-        if (data.profile) {
-          setCookie("spoon_profile", JSON.stringify(data.profile));
-        }
-        setCookie("spoon_profile_id", data.profile_id);
-      } catch (error) {
-        console.error("Profile fetch error:", error);
-      }
+    const latest = toolParts[toolParts.length - 1];
+    if (!latest || typeof latest.output !== "object" || latest.output === null) {
+      return;
+    }
+    const payload = latest.output as {
+      status?: string;
+      question?: { question_id?: string };
     };
-
-    void Promise.all(
-      profileOutputs
-        .filter((part) => part.state === "output-available")
-        .map((part) => handleProfile(part.output)),
-    );
+    if (payload.status === "question" && payload.question?.question_id) {
+      setActiveQuestionId(payload.question.question_id);
+      setPendingQuestionId(null);
+      lastAnswerKeyRef.current = null;
+    } else {
+      setActiveQuestionId(null);
+    }
   }, [messages]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, status, scrollToBottom]);
+
 
   void setMessages;
   void resumeStream;
   void addToolOutput;
   void welcomeTitle;
 
-  // 极简风格的 Input 容器
   const inputContainerClass = cn(
     "relative w-full max-w-2xl",
-    "rounded-[32px] bg-muted/30 p-1.5 backdrop-blur-md",
+    "bg-muted/30 p-1.5 backdrop-blur-md",
     "border border-black/5 dark:border-white/5",
     "shadow-sm transition-all duration-300 ease-out",
     "hover:bg-muted/50 hover:shadow-md",
@@ -168,7 +166,40 @@ export function Chat({
     <div className={cn("relative flex min-h-[100dvh] flex-col", className)}>
       {hasMessages ? (
         <>
-          <ChatRender className="pb-40" messages={messages} />
+          <div className="mx-auto w-full max-w-2xl px-4">
+            <ChatRender
+              className="pb-40"
+              messages={messages}
+              activeQuestionId={activeQuestionId}
+              onQuestionSelect={({ questionId, optionId, optionText }) => {
+                if (status !== "ready") {
+                  return;
+                }
+                const answerKey = `${questionId}:${optionId}`;
+                if (
+                  !questionId ||
+                  pendingQuestionId === questionId ||
+                  lastAnswerKeyRef.current === answerKey
+                ) {
+                  return;
+                }
+                lastAnswerKeyRef.current = answerKey;
+                setPendingQuestionId(questionId);
+                setActiveQuestionId(null);
+                const sessionId = getOrCreateSessionId();
+                  const prompt = [
+                    "问卷作答：",
+                    `session_id=${sessionId}`,
+                    `question_id=${questionId}`,
+                    `choice_id=${optionId}`,
+                    `choice_text=${optionText}`,
+                    "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。不要复述参数或输出。",
+                  ].join(", ");
+                sendMessage({ text: prompt, files: [] });
+              }}
+            />
+            <div ref={messagesEndRef} />
+          </div>
 
           <div className="fixed inset-x-0 bottom-0 z-10">
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-background via-background/90 to-transparent" />

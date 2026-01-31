@@ -14,6 +14,7 @@ import { MessageQuestionnaire } from "./chat-render-questionnaire";
 import { MessageText } from "./chat-render-text";
 import { MessageTools } from "./chat-render-tools";
 import { JudgeReport } from "./judge-report";
+import { JudgeNote } from "./judge-note";
 
 interface ChatRenderProps {
   messages: UIMessage[];
@@ -61,6 +62,20 @@ export function ChatRender({
                       key={`${message.id}-judge-${index}`}
                       text={part.text}
                       className="mb-4"
+                    />
+                  ))}
+                {message.parts
+                  .filter(
+                    (part) =>
+                      part.type === "text" &&
+                      typeof part.text === "string" &&
+                      part.text.includes("【法官旁注】"),
+                  )
+                  .map((part, index) => (
+                    <JudgeNote
+                      key={`${message.id}-judge-note-${index}`}
+                      text={part.text}
+                      className="mb-3"
                     />
                   ))}
                 <MessageText message={message} />

@@ -3,6 +3,7 @@
 import type { UIMessage } from "ai";
 import { MessageResponse } from "../ai-elements/message";
 import { hasJudgeReport } from "./judge-report";
+import { hasJudgeNote } from "./judge-note";
 
 interface MessageTextProps {
   message: UIMessage;
@@ -16,7 +17,7 @@ const isTextPart = (part: MessagePart): part is { type: "text"; text: string } =
 export function MessageText({ message }: MessageTextProps) {
   const textParts = message.parts.filter(isTextPart);
   const nonJudgeParts = textParts.filter(
-    (part) => !hasJudgeReport(part.text),
+    (part) => !hasJudgeReport(part.text) && !hasJudgeNote(part.text),
   );
 
   if (nonJudgeParts.length === 0) {

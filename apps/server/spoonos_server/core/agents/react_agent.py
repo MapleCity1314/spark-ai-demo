@@ -144,6 +144,31 @@ def _build_text_message(message_id: str, text: str, state: str) -> Dict[str, Any
     }
 
 
+def _build_judge_note_text(speaker: str, message: str) -> str:
+    if not message:
+        return "【法官旁注】未捕捉到有效内容，暂不作出理由。"
+    lowered = message.lower()
+    has_trade_intent = any(
+        keyword in lowered
+        for keyword in ("买", "卖", "抄底", "梭哈", "加仓", "减仓", "止损", "止盈")
+    )
+    has_uncertainty = any(
+        keyword in lowered for keyword in ("可能", "不确定", "感觉", "猜", "赌", "也许")
+    )
+    has_meme = "meme" in lowered or "土狗" in message
+    reason_parts = []
+    if has_trade_intent:
+        reason_parts.append("出现交易动作倾向，需要判断动机与风险")
+    if has_uncertainty:
+        reason_parts.append("表达含糊或不确定，结论稳定性不足")
+    if has_meme:
+        reason_parts.append("涉及高波动标的，风险优先级上调")
+    if not reason_parts:
+        reason_parts.append("信息量有限，优先要求补充依据与边界条件")
+    reason = "；".join(reason_parts)
+    return f"【法官旁注】{speaker}发言逻辑判断：{reason}。"
+
+
 async def stream_agent_events(
     agent: SpoonReactAI, user_message: str, timeout: float
 ) -> AsyncIterator[Dict[str, Any]]:
@@ -185,6 +210,10 @@ async def stream_agent_events(
     buffer = ""
 
     try:
+        user_note_id = str(uuid.uuid4())
+        user_note = _build_judge_note_text("用户", user_message)
+        yield _build_text_message(user_note_id, user_note, "done")
+
         while True:
             if agent.task_done.is_set() and queue.empty():
                 break
@@ -212,5 +241,8 @@ async def stream_agent_events(
             buffer = str(result)
         if buffer:
             yield _build_text_message(message_id, buffer, "done")
+            judge_note_id = str(uuid.uuid4())
+            judge_note = _build_judge_note_text("AI", buffer)
+            yield _build_text_message(judge_note_id, judge_note, "done")
     finally:
         agent._default_timeout = original_timeout

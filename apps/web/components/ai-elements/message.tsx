@@ -26,15 +26,36 @@ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
 };
 
-export const Message = ({ className, from, ...props }: MessageProps) => (
+export const Message = ({ className, from, children, ...props }: MessageProps & { children?: React.ReactNode }) => (
   <div
     className={cn(
-      "group flex w-full max-w-[95%] flex-col gap-2",
-      from === "user" ? "is-user ml-auto justify-end" : "is-assistant",
+      "group flex w-full max-w-[95%] items-start gap-2",
+      from === "user" ? "is-user ml-auto justify-end flex-row-reverse" : "is-assistant flex-row",
       className
     )}
     {...props}
-  />
+  >
+    <div className="flex-shrink-0">
+      <div className="size-8 border-2 border-border rounded-full overflow-hidden">
+        {from === "user" ? (
+          <img 
+            src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=user%20avatar%20pixel%20art%20style%20portrait&image_size=square" 
+            alt="User" 
+            className="size-full object-cover"
+          />
+        ) : (
+          <img 
+            src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=robot%20avatar%20pixel%20art%20style%20portrait&image_size=square" 
+            alt="Assistant" 
+            className="size-full object-cover"
+          />
+        )}
+      </div>
+    </div>
+    <div className="flex flex-col gap-2 flex-1">
+      {children}
+    </div>
+  </div>
 );
 
 export type MessageContentProps = HTMLAttributes<HTMLDivElement>;

@@ -18,6 +18,8 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
+  apps/server: {}
+
   apps/web:
     dependencies:
       '@ai-sdk/openai-compatible':
@@ -146,6 +148,9 @@ importers:
       use-stick-to-bottom:
         specifier: ^1.1.2
         version: 1.1.2(react@19.2.3)
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4

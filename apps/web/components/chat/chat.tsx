@@ -9,6 +9,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ChatInput } from "./chat-input";
 import { ChatRender } from "./chat-render";
 import { ThemeToggle } from "../ui/theme-toggle";
+import { PixelParticles } from "../ui/pixel-particles";
 import { SpoonSseChatTransport } from "@/lib/spoon-sse-chat-transport";
 
 interface ChatProps {
@@ -165,6 +166,7 @@ export function Chat({
 
   return (
     <div className={cn("relative flex min-h-[100dvh] flex-col", className)}>
+      <PixelParticles />
       <ThemeToggle />
       {hasMessages ? (
         <>

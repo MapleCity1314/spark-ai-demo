@@ -1,46 +1,62 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==============================================================================
+# 🟢 General / OS / IDE
+# ==============================================================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
 
-# Dependencies
+# ==============================================================================
+# 🟡 Node.js / Next.js (Frontend)
+# ==============================================================================
 node_modules
 .pnp
 .pnp.js
-
-# Local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Testing
 coverage
-
-# Turbo
 .turbo
-
-# Vercel
 .vercel
-
-# Build Outputs
 .next/
 out/
 build
 dist
 
-
-# Debug
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# Misc
-.DS_Store
+# ==============================================================================
+# 🔵 Python / FastAPI (Backend) - ⚠️ 補上這個！
+# ==============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+*.egg-info/
+develop-eggs/
+.coverage
+htmlcov/
+
+# ==============================================================================
+# 🔴 Secrets & Privacy (Critical)
+# ==============================================================================
+.env
+.env.*
 *.pem
+*.key
 
+# ⚠️ [模塊一] 忽略上傳的交易紀錄，保護隱私
+apps/server/uploads/
+**/uploads/
+
+# ==============================================================================
+# 🟣 Misc / Specific
+# ==============================================================================
 .agents/*
 .codex/*
-
 docs/*
-my-turborepo/*
-pnpm-lock.yaml
-pnpm-lock.yaml
+my-turborepo/* 

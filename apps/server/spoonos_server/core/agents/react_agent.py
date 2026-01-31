@@ -7,17 +7,19 @@ from spoon_ai.chat import ChatBot
 from spoon_ai.tools import ToolManager
 
 from spoonos_server.core.config import AppConfig
+from spoonos_server.core.prompt import system_prompt
 from spoonos_server.core.mcp.loader import load_mcp_tools
 from spoonos_server.core.schemas import SubAgentSpec
-from spoonos_server.core.tools.toolkits import load_toolkits, resolve_toolkits
+from spoonos_server.core.tools.toolkits import (
+    available_toolkits,
+    load_toolkits,
+    resolve_toolkits,
+)
 from spoonos_server.core.tools.tool_call_wrapper import wrap_tools_for_calls
 from spoonos_server.core.agents.sub_agents import SubAgentTool, create_subagents
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "You are a SpoonOS ReAct agent. Be concise, structured, and tool-aware. "
-    "Use tools when they can improve accuracy. If a tool is needed, call it."
-)
+DEFAULT_SYSTEM_PROMPT = system_prompt
 
 
 def _build_tool_list(tool_manager: ToolManager) -> str:
@@ -35,6 +37,7 @@ def create_react_agent(
     config: AppConfig,
     system_prompt: Optional[str],
     profile_prompt: Optional[str],
+    session_id: Optional[str],
     provider: Optional[str],
     model: Optional[str],
     toolkits: Optional[List[str]],
@@ -55,22 +58,42 @@ def create_react_agent(
         subagent_tool = SubAgentTool(subagent_map)
         tools.append(subagent_tool)
 
-    tools, tool_wrappers = wrap_tools_for_calls(tools)
+    tools, tool_wrappers = wrap_tools_for_calls(
+        tools, context={"session_id": session_id} if session_id else None
+    )
 
     tool_manager = ToolManager(tools)
     tool_list = _build_tool_list(tool_manager)
+    toolkit_list = ", ".join(selected_toolkits) if selected_toolkits else "(none)"
+    available_list = ", ".join(available_toolkits())
+    mcp_status = "enabled" if mcp_enabled else "disabled"
+    mcp_servers = (
+        ", ".join(server.name for server in config.mcp.servers)
+        if config.mcp.servers
+        else "(none)"
+    )
 
     prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     if profile_prompt:
         prompt = f"{prompt}\n\nUser profile context:\n{profile_prompt.strip()}"
-    prompt = f"{prompt}\n\nAvailable tools:\n{tool_list}"
+    prompt = (
+        f"{prompt}\n\nEnabled toolkits: {toolkit_list}"
+        f"\nAvailable toolkits: {available_list}"
+        f"\nMCP status: {mcp_status} (servers: {mcp_servers})"
+        f"\n\nAvailable tools:\n{tool_list}"
+    )
+
+    llm_kwargs = {
+        "llm_provider": provider or config.llm.provider,
+        "model_name": model or config.llm.model,
+        "api_key": config.llm.api_key,
+        "base_url": config.llm.base_url,
+        "stream": True,
+    }
 
     agent = SpoonReactAI(
         name="spoon_react_server",
-        llm=ChatBot(
-            llm_provider=provider or config.llm.provider,
-            model_name=model or config.llm.model,
-        ),
+        llm=ChatBot(**llm_kwargs),
         tools=tool_manager,
         max_steps=8,
     )
@@ -134,7 +157,27 @@ async def stream_agent_events(
         finally:
             agent.task_done.set()
 
+    async def stream_llm_tokens() -> None:
+        llm = getattr(agent, "llm", None)
+        if not llm or not hasattr(llm, "astream"):
+            return
+        try:
+            async for chunk in llm.astream(
+                messages=[{"role": "user", "content": user_message}],
+                system_msg=getattr(agent, "system_prompt", None),
+            ):
+                delta = getattr(chunk, "delta", None)
+                if delta is None:
+                    delta = getattr(chunk, "content", None)
+                if delta is None:
+                    delta = str(chunk)
+                if delta:
+                    await agent.output_queue.put({"delta": str(delta)})
+        except Exception:
+            return
+
     run_task = asyncio.create_task(run_and_signal())
+    token_task = asyncio.create_task(stream_llm_tokens())
     queue = agent.output_queue
     message_id = str(uuid.uuid4())
     buffer = ""
@@ -161,7 +204,10 @@ async def stream_agent_events(
                 if run_task.done():
                     break
 
-        await run_task
+        result = await run_task
+        token_task.cancel()
+        if result:
+            buffer = str(result)
         if buffer:
             yield _build_text_message(message_id, buffer, "done")
     finally:

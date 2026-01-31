@@ -91,7 +91,7 @@ export function Chat({
         "http://localhost:8000",
       getBody: () => ({
         profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
-        toolkits: webSearchEnabled ? ["profile", "web"] : ["profile"],
+        toolkits: webSearchEnabled ? ["profile", "crypto","web"] : ["profile","crypto"],
         session_id: getOrCreateSessionId(),
       }),
       fetchImpl: fetchWithErrorHandlers,

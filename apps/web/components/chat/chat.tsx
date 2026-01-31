@@ -156,7 +156,7 @@ export function Chat({
 
   const inputContainerClass = cn(
     "relative w-full max-w-2xl",
-    "bg-muted/30 p-1.5 backdrop-blur-md",
+    "bg-muted/30 backdrop-blur-md",
     "border border-black/5 dark:border-white/5",
     "shadow-sm transition-all duration-300 ease-out",
     "hover:bg-muted/50 hover:shadow-md",
@@ -193,7 +193,7 @@ export function Chat({
                     `question_id=${questionId}`,
                     `choice_id=${optionId}`,
                     `choice_text=${optionText}`,
-                    "请调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，请停止调用并给出完成提示。不要复述参数或输出。",
+                    "必须调用工具 mbti_trader_questionnaire_next 继续下一题；若工具返回 status=completed，停止调用并给出完成提示。不要复述参数或输出。",
                   ].join(", ");
                 sendMessage({ text: prompt, files: [] });
               }}

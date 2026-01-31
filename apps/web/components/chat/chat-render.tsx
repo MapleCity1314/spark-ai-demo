@@ -50,7 +50,7 @@ type QuestionnaireData = {
 
 const isQuestionnaireToolPart = (
   part: MessagePart,
-): part is { type: string; output?: unknown } =>
+): part is { type: `tool-${string}`;output?: unknown;toolCallId: string; state: "output-available"; input: unknown;} =>
   part.type === "tool-mbti_trader_questionnaire" ||
   part.type === "tool-mbti_trader_questionnaire_next";
 
@@ -100,11 +100,26 @@ export function ChatRender({
                   )}
 
                   {textParts.length > 0 ? (
-                    textParts.map((part, index) => (
-                      <MessageResponse key={`message-${message.id}-${index}`}>
-                        {part.text}
-                      </MessageResponse>
-                    ))
+                    textParts.map((part, index) => {
+                      const text = part.text;
+                      if (text.includes("问卷作答：")) {
+                        const choiceMatch = text.match(/choice_text=([^,]+)/);
+                        const choiceIDMatch = text.match(/choice_id=([^,]+)/);
+                        const choiceID = choiceIDMatch ? choiceIDMatch[1] : "选择了一个选项";
+                        const choiceText = choiceMatch ? choiceMatch[1] : "选择了一个选项";
+                        return(
+                          <MessageResponse key={`message-${message.id}-${index}`}>
+                            {choiceID+". "+choiceText}
+                          </MessageResponse>
+                        );
+                      }else{
+                        return (
+                          <MessageResponse key={`message-${message.id}-${index}`}>
+                            {text}
+                          </MessageResponse>
+                        );
+                      }
+                    })
                   ) : message.role === "assistant" ? (
                     <div className="flex items-center justify-center p-4">
                       <div className="flex space-x-2">
@@ -147,10 +162,10 @@ export function ChatRender({
                               type="button"
                               key={option.id}
                               className={cn(
-                                "rounded-xl border border-border px-3 py-2 text-left text-sm text-foreground transition",
+                                "rounded-none border-2 border-border px-3 py-2 text-left text-sm text-foreground transition",
                                 isActive
-                                  ? "bg-muted/60 hover:bg-muted"
-                                  : "bg-muted/30 opacity-60",
+                                  ? "bg-yellow-100 hover:bg-yellow-200 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.8)]"
+                                  : "bg-gray-100 opacity-80",
                               )}
                               disabled={!isActive}
                               onClick={() =>

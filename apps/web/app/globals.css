@@ -134,11 +134,11 @@
     @apply border-border outline-ring/50;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+    letter-spacing: 0.2em;
   }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-pixel-sans);
-    letter-spacing: -0.02em;
   }
   button, input, textarea {
     @apply rounded-none border-2 border-border;

@@ -47,12 +47,12 @@ export const MessageContent = ({
   <div
     className={cn(
       "is-user:dark flex w-fit min-w-0 max-w-full flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
+      "group-[.is-user]:ml-auto group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-assistant]:text-foreground",
       "border-2 border-border p-3",
-      "group-[.is-user]:bg-blue-100 group-[.is-user]:border-blue-800",
-      "group-[.is-assistant]:bg-white group-[.is-assistant]:border-black",
-      "shadow-[3px_3px_0px_0px_rgba(0,0,0,0.8)]",
+      "group-[.is-user]:bg-blue-100 group-[.is-user]:border-blue-800 dark:group-[.is-user]:bg-blue-900 dark:group-[.is-user]:border-blue-600 dark:group-[.is-user]:text-white",
+      "group-[.is-assistant]:bg-white group-[.is-assistant]:border-black dark:group-[.is-assistant]:bg-zinc-800 dark:group-[.is-assistant]:border-zinc-600 dark:group-[.is-assistant]:text-white",
+      "shadow-[3px_3px_0px_0px_rgba(0,0,0,0.8)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,0.3)]",
       className
     )}
     {...props}

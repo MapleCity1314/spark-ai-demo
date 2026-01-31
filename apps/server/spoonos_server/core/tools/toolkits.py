@@ -52,6 +52,8 @@ except Exception:  # pragma: no cover - optional toolkit
     TargetAnalysisTool = None
     TechnicalAnalysisTool = None
     VolatilityTool = None
+
+try:
     from spoonos_server.core.tools.mbti_questionnaire_tools import (
         MBTITraderQuestionnaireTool,
         MBTITraderQuestionnaireNextTool,
@@ -83,6 +85,9 @@ TOOLKIT_REGISTRY: Dict[str, Any] = {
             TechnicalAnalysisTool,
             VolatilityTool,
             EcosystemTool,
+        )
+        if tool
+    ],
     "profile": lambda: [
         tool()
         for tool in (

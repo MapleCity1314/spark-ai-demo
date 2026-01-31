@@ -131,7 +131,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring/50 transition-colors duration-300;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     letter-spacing: 0.2em;

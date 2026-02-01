@@ -28,6 +28,11 @@ const BattleChat: React.FC<BattleChatProps> = ({ history, displayContent, speake
                 msg.role === 'user' ? 'bg-blue-900/30' : msg.role === 'mirror' ? 'bg-red-900/30' : 'bg-slate-800/50'
               }`}
             >
+              {msg.role === 'judge' && msg.judgeTag && (
+                <div className="text-[10px] uppercase tracking-wide text-slate-300 mb-2">
+                  {msg.judgeTag === 'note' ? '法官旁注' : '法官裁决'}
+                </div>
+              )}
               {msg.content}
             </div>
           </div>

@@ -1,4 +1,5 @@
 import inspect
+import json
 import uuid
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
@@ -63,7 +64,45 @@ if BaseTool:
 
         async def execute(self, **kwargs: Any) -> Any:
             if "session_id" in self._context and "session_id" not in kwargs:
-                kwargs["session_id"] = self._context["session_id"]
+                try:
+                    signature = inspect.signature(self._tool.execute)
+                    accepts_kwargs = any(
+                        param.kind == inspect.Parameter.VAR_KEYWORD
+                        for param in signature.parameters.values()
+                    )
+                    if accepts_kwargs or "session_id" in signature.parameters:
+                        kwargs["session_id"] = self._context["session_id"]
+                except (TypeError, ValueError):
+                    kwargs["session_id"] = self._context["session_id"]
+            tool_cache = self._context.get("tool_cache")
+            cache_key = None
+            if tool_cache is not None:
+                key_payload = {
+                    "tool": getattr(self._tool, "name", self._tool.__class__.__name__),
+                    "kwargs": {
+                        key: value for key, value in kwargs.items() if key != "session_id"
+                    },
+                }
+                try:
+                    cache_key = json.dumps(key_payload, ensure_ascii=False, sort_keys=True)
+                except TypeError:
+                    cache_key = str(key_payload)
+                cached = tool_cache.get(cache_key)
+                if cached is not None:
+                    tool_call_id = str(uuid.uuid4())
+                    input_payload = {"description": self.description, **kwargs}
+                    await self._emit_tool_message(
+                        tool_call_id,
+                        "input-available",
+                        input_payload,
+                    )
+                    await self._emit_tool_message(
+                        tool_call_id,
+                        "output-available",
+                        input_payload,
+                        output=cached,
+                    )
+                    return cached
             tool_call_id = str(uuid.uuid4())
             input_payload = {"description": self.description, **kwargs}
             await self._emit_tool_message(
@@ -79,6 +118,8 @@ if BaseTool:
                     input_payload,
                     output=result,
                 )
+                if tool_cache is not None and cache_key is not None:
+                    tool_cache[cache_key] = result
                 return result
             except Exception as exc:
                 await self._emit_tool_message(
@@ -87,7 +128,7 @@ if BaseTool:
                     input_payload,
                     error_text=str(exc),
                 )
-                raise
+                return {"error": str(exc)}
 else:
     ToolCallWrapper = None
 

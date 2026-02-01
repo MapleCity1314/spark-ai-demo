@@ -1,11 +1,13 @@
 "use client";
 
 import { Search, Zap } from "lucide-react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import PixelCharacter from "../components/pixel-character";
-import { DIMENSIONS, HOT_TOKENS, MBTI_MAP } from "../constants";
+import { DIMENSIONS, DIMENSION_PROMPTS, HOT_TOKENS, MBTI_MAP } from "../constants";
 import { useAppStore } from "../store/use-app-store";
+import { useProfileStore } from "../store/profile-store";
 
 export default function SetupPage() {
   const router = useRouter();
@@ -13,11 +15,28 @@ export default function SetupPage() {
   const mirrorMBTI = useAppStore((state) => state.mirrorMBTI);
   const targetSymbol = useAppStore((state) => state.targetSymbol);
   const selectedDims = useAppStore((state) => state.selectedDims);
+  const setSelectedDims = useAppStore((state) => state.setSelectedDims);
   const setTargetSymbol = useAppStore((state) => state.setTargetSymbol);
   const toggleDimension = useAppStore((state) => state.toggleDimension);
   const resetBattle = useAppStore((state) => state.resetBattle);
+  const applyAssessmentProfile = useAppStore(
+    (state) => state.applyAssessmentProfile,
+  );
+  const profile = useProfileStore((state) => state.profile);
+  const clearProfile = useProfileStore((state) => state.clearProfile);
 
   const canLaunch = targetSymbol && selectedDims.length > 0;
+
+  useEffect(() => {
+    if (!profile) {
+      router.replace("/assessment");
+      return;
+    }
+    if (profile.mbtiType) {
+      applyAssessmentProfile(profile.mbtiType);
+    }
+    setSelectedDims(DIMENSIONS.map((dimension) => dimension.key));
+  }, [applyAssessmentProfile, profile, router, setSelectedDims]);
 
   return (
     
@@ -118,6 +137,23 @@ export default function SetupPage() {
               <p className="text-xs md:text-sm text-slate-400 italic font-sans leading-snug">
                 {MBTI_MAP[userMBTI].style}
               </p>
+              {profile && (
+                <div className="mt-4 border-t border-slate-700 pt-3 text-xs text-slate-300 font-sans">
+                  <div className="font-arcade text-[10px] uppercase text-cyan-400 mb-2">
+                    PROFILE ID
+                  </div>
+                  <div className="break-all text-[11px]">{profile.id}</div>
+                  <button
+                    onClick={() => {
+                      clearProfile();
+                      router.push("/assessment");
+                    }}
+                    className="mt-3 pixel-btn px-3 py-2 text-[10px] uppercase"
+                  >
+                    重做画像
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 维度选择 */}
@@ -136,8 +172,15 @@ export default function SetupPage() {
                         : "bg-[#121216] border-slate-800 text-slate-600 hover:border-slate-600"
                     }`}
                   >
-                    <span className="font-sans text-xs md:text-sm font-bold">{dimension.title}</span>
+                    <span className="font-sans text-xs md:text-sm font-bold">
+                      {dimension.title}
+                    </span>
                     {selectedDims.includes(dimension.key) && <Zap size={14} className="text-blue-400" />}
+                    {selectedDims.includes(dimension.key) && (
+                      <p className="mt-2 text-[10px] text-slate-400 font-sans">
+                        {DIMENSION_PROMPTS[dimension.key]}
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>

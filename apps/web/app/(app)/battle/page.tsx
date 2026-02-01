@@ -13,10 +13,13 @@ import BattleMobileNav from "../components/battle/battle-mobile-nav";
 import BattleSidePanel from "../components/battle/battle-side-panel";
 import type { MobileTab } from "../components/battle/battle-types";
 import { useAppStore } from "../store/use-app-store";
+import { useProfileStore } from "../store/profile-store";
+import { DIMENSION_PROMPTS } from "../constants";
 import { runAgent } from "../services/agentService";
 import type { Message } from "../types";
 import { SpoonSseChatTransport } from "@/lib/spoon-sse-chat-transport";
-import { LAWYER_SYSTEM_PROMPT, LAWYER_TOOLKITS } from "../lib/lawyer-agent";
+import { LAWYER_SYSTEM_PROMPT } from "../lib/lawyer-agent";
+import { JUDGE_SYSTEM_PROMPT } from "../lib/judge-agent";
 
 export default function BattlePage() {
   const router = useRouter();
@@ -31,6 +34,7 @@ export default function BattlePage() {
   const loading = useAppStore((state) => state.loading);
   const effect = useAppStore((state) => state.effect);
   const activeTab = useAppStore((state) => state.activeTab); // 这是 MarketPanel 内部的 tab
+  const profile = useProfileStore((state) => state.profile);
   
   // Actions
   const setBattleState = useAppStore((state) => state.setBattleState);
@@ -42,9 +46,11 @@ export default function BattlePage() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasInitializedRef = useRef(false);
+  const lastFallbackUserRef = useRef<string | null>(null);
 
   // 新增: 移动端当前显示的 Tab，默认为聊天
   const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+  const [fallbackMessages, setFallbackMessages] = useState<Message[]>([]);
 
   const getCookie = useCallback((name: string) => {
     if (typeof document === "undefined") {
@@ -83,21 +89,65 @@ export default function BattlePage() {
       "这是一个投资辩论庭审场景。",
       `用户人格：${userMBTI}`,
       `镜像对手人格：${mirrorMBTI}`,
+      `用户画像：${profile?.profilePrompt ?? "未提供"}`,
+      `画像ID：${profile?.id ?? "未提供"}`,
       `投资标的：${targetSymbol}`,
       `辩论维度顺序：${selectedDims.join("、") || "未指定"}`,
     ];
+    const dimensionHints = selectedDims
+      .map((dimension) => `${dimension}: ${DIMENSION_PROMPTS[dimension]}`)
+      .join("；");
+    parts.push(`维度提示：${dimensionHints || "无"}`);
     if (marketData) {
       parts.push(
         `市场数据：价格 ${marketData.price}，24h涨跌 ${marketData.change24h}，情绪 ${marketData.sentiment}，风险 ${marketData.risk}。`,
       );
     }
     return parts.join("\n");
-  }, [marketData, mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
+  }, [marketData, mirrorMBTI, profile?.id, profile?.profilePrompt, selectedDims, targetSymbol, userMBTI]);
 
   const lawyerSystemPrompt = useMemo(
-    () => `${LAWYER_SYSTEM_PROMPT}\n\n${requestPrompt}`,
+    () => `[ROLE:BATTLE]\n${LAWYER_SYSTEM_PROMPT}\n\n${requestPrompt}`,
     [requestPrompt],
   );
+  const lawyerFallbackPrompt = useMemo(
+    () =>
+      `${LAWYER_SYSTEM_PROMPT}\n\n` +
+      "本轮仅输出控方反驳文本，不要调用任何工具或子代理。\n" +
+      "不要输出法官内容或标签。\n\n" +
+      requestPrompt,
+    [requestPrompt],
+  );
+
+  const judgeSystemPrompt = useMemo(() => {
+    const contextParts = [
+      "案件上下文：",
+      `用户人格：${userMBTI}`,
+      `镜像对手人格：${mirrorMBTI}`,
+      `用户画像：${profile?.profilePrompt ?? "未提供"}`,
+      `画像ID：${profile?.id ?? "未提供"}`,
+      `投资标的：${targetSymbol}`,
+      `辩论维度顺序：${selectedDims.join("、") || "未指定"}`,
+    ];
+    const dimensionHints = selectedDims
+      .map((dimension) => `${dimension}: ${DIMENSION_PROMPTS[dimension]}`)
+      .join("；");
+    contextParts.push(`维度提示：${dimensionHints || "无"}`);
+    if (marketData) {
+      contextParts.push(
+        `市场数据：价格 ${marketData.price}，24h涨跌 ${marketData.change24h}，情绪 ${marketData.sentiment}，风险 ${marketData.risk}。`,
+      );
+    }
+    return `${JUDGE_SYSTEM_PROMPT}\n\n${contextParts.join("\n")}`;
+  }, [
+    marketData,
+    mirrorMBTI,
+    profile?.id,
+    profile?.profilePrompt,
+    selectedDims,
+    targetSymbol,
+    userMBTI,
+  ]);
 
   const chatTransport = useMemo(
     () =>
@@ -105,14 +155,20 @@ export default function BattlePage() {
         baseUrl:
           process.env.NEXT_PUBLIC_SPOONOS_API_BASE_URL ??
           "http://localhost:8000",
+        ignoreToolEvents: true,
         getBody: () => ({
           system_prompt: lawyerSystemPrompt,
-          profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
-          toolkits: LAWYER_TOOLKITS,
+          profile_prompt:
+            profile?.profilePrompt ?? getCookie("spoon_profile_prompt") ?? undefined,
           session_id: getOrCreateSessionId(),
         }),
       }),
-    [getCookie, getOrCreateSessionId, lawyerSystemPrompt],
+    [
+      getCookie,
+      getOrCreateSessionId,
+      lawyerSystemPrompt,
+      profile?.profilePrompt,
+    ],
   );
 
   const { messages, sendMessage, status } = useChat({
@@ -140,7 +196,10 @@ export default function BattlePage() {
     }
   };
 
-  const parseJudgeTaggedMessage = (text: string): Message | null => {
+  const parseJudgeTaggedMessage = (
+    text: string,
+    allowNote: boolean,
+  ): Message | null => {
     const reportMatch = text.match(/<judge\.report>([\s\S]*?)<\/judge\.report>/);
     if (reportMatch) {
       return {
@@ -148,6 +207,9 @@ export default function BattlePage() {
         content: reportMatch[1]?.trim() ?? "",
         judgeTag: "report",
       };
+    }
+    if (!allowNote) {
+      return null;
     }
     const noteMatch = text.match(/<judge\.note>([\s\S]*?)<\/judge\.note>/);
     if (noteMatch) {
@@ -158,6 +220,18 @@ export default function BattlePage() {
       };
     }
     return null;
+  };
+
+  const isJudgeTaggedText = (text: string) =>
+    /<judge\\.(note|report)>/.test(text) ||
+    text.trim().startsWith("【法官裁决】") ||
+    text.trim().startsWith("【法官旁注】");
+
+  const parseScoreDelta = (text: string) => {
+    const match = text.match(/scoreDelta\\s*=\\s*(-?\\d+)/i);
+    if (!match) return null;
+    const parsed = Number(match[1]);
+    return Number.isNaN(parsed) ? null : parsed;
   };
 
   const initBattle = useCallback(async () => {
@@ -221,7 +295,7 @@ export default function BattlePage() {
   }, [
     getCookie,
     getOrCreateSessionId,
-    requestPrompt,
+    lawyerSystemPrompt,
     selectedDims,
     setBattleState,
     setLoading,
@@ -254,6 +328,8 @@ export default function BattlePage() {
     return `庭审正式开启。被告人 ${userMBTI} 申请买入 $${targetSymbol}。控方审计员 ${mirrorMBTI} 已入场，当前维度：${selectedDims[0]}。请开始你的辩解。`;
   }, [mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
 
+  const selectedDimsKey = useMemo(() => selectedDims.join("|"), [selectedDims]);
+
   const chatHistory = useMemo(() => {
     const mapped: Message[] = [];
     if (introMessage) {
@@ -267,18 +343,19 @@ export default function BattlePage() {
       if (!text.trim()) {
         continue;
       }
-      const taggedJudgeMessage = parseJudgeTaggedMessage(text);
-      if (taggedJudgeMessage) {
-        mapped.push(taggedJudgeMessage);
-        continue;
-      }
+    const taggedJudgeMessage = parseJudgeTaggedMessage(text, false);
+    if (taggedJudgeMessage) {
+      mapped.push(taggedJudgeMessage);
+      continue;
+    }
+    const hasJudgeNote = /<judge\.note>/.test(text);
+    if (hasJudgeNote) {
+      continue;
+    }
       let role: Message["role"] = message.role === "user" ? "user" : "mirror";
       if (message.role === "assistant") {
         const trimmed = text.trim();
-        if (
-          trimmed.startsWith("【法官裁决】") ||
-          trimmed.startsWith("【法官旁注】")
-        ) {
+        if (trimmed.startsWith("【法官裁决】")) {
           role = "judge";
         }
       }
@@ -287,8 +364,8 @@ export default function BattlePage() {
       }
       mapped.push({ role, content: text });
     }
-    return mapped;
-  }, [introMessage, messages]);
+    return [...mapped, ...fallbackMessages];
+  }, [fallbackMessages, introMessage, messages]);
 
   const handleFinalVerdict = useCallback(async () => {
     if (loading) return;
@@ -311,9 +388,9 @@ export default function BattlePage() {
     const resultMessages = await runAgent({
       message: reportPrompt,
       sessionId: getOrCreateSessionId(),
-      systemPrompt: requestPrompt,
-      profilePrompt: getCookie("spoon_profile_prompt") ?? undefined,
-      toolkits: ["profile", "crypto", "web"],
+      systemPrompt: lawyerSystemPrompt,
+      profilePrompt:
+        profile?.profilePrompt ?? getCookie("spoon_profile_prompt") ?? undefined,
     });
     const report = resultMessages.map(getMessageText).join("\n");
     setFinalReport(report || "无法生成报告。");
@@ -326,12 +403,172 @@ export default function BattlePage() {
     getOrCreateSessionId,
     loading,
     mirrorMBTI,
-    requestPrompt,
+    lawyerSystemPrompt,
     router,
     setFinalReport,
     setLoading,
     targetSymbol,
     userMBTI
+  ]);
+
+  const lastRoundNeedsJudge =
+    chatHistory.length >= 2 &&
+    chatHistory[chatHistory.length - 1].role === "mirror" &&
+    chatHistory[chatHistory.length - 2].role === "user" &&
+    !chatHistory.slice(-3).some(
+      (message) => message.role === "judge" && message.judgeTag === "report",
+    );
+
+  const judgeFallbackKey = useMemo(() => {
+    const lastMessage = chatHistory[chatHistory.length - 1];
+    const prevMessage = chatHistory[chatHistory.length - 2];
+    return [
+      battleState.currentDimensionIndex,
+      lastRoundNeedsJudge ? "1" : "0",
+      loading ? "1" : "0",
+      selectedDimsKey,
+      judgeSystemPrompt,
+      lastMessage?.role ?? "",
+      prevMessage?.role ?? "",
+      lastMessage?.content ?? "",
+      prevMessage?.content ?? "",
+    ].join("|");
+  }, [
+    battleState.currentDimensionIndex,
+    chatHistory,
+    judgeSystemPrompt,
+    lastRoundNeedsJudge,
+    loading,
+    selectedDimsKey,
+  ]);
+
+  useEffect(() => {
+    if (!lastRoundNeedsJudge || loading) return;
+    let isActive = true;
+
+    const requestJudge = async () => {
+      const [userMessage, mirrorMessage] = chatHistory.slice(-2);
+      const currentDimension =
+        selectedDims[battleState.currentDimensionIndex] ?? selectedDims[0] ?? "";
+      const prompt = `
+请根据以下辩论内容输出裁决（严格使用 <judge.report> 标签，含 scoreDelta）。
+议题：${currentDimension}
+正方观点（用户）：${userMessage?.content ?? ""}
+反方观点（控方）：${mirrorMessage?.content ?? ""}
+`.trim();
+      try {
+        const resultMessages = await runAgent({
+          message: prompt,
+          sessionId: getOrCreateSessionId(),
+          systemPrompt: judgeSystemPrompt,
+          toolkits: [],
+        });
+        if (!isActive) return;
+        const text = resultMessages.map(getMessageText).join("\n");
+        const judgeMessage = parseJudgeTaggedMessage(text, false);
+        if (judgeMessage) {
+          setBattleState((prev) => ({
+            ...prev,
+            history: [...prev.history, judgeMessage],
+            speaker: "judge",
+          }));
+        } else if (text.trim()) {
+          setBattleState((prev) => ({
+            ...prev,
+            history: [
+              ...prev.history,
+              { role: "judge", content: text.trim(), judgeTag: "report" },
+            ],
+            speaker: "judge",
+          }));
+        }
+        const scoreDelta = parseScoreDelta(text);
+        if (scoreDelta !== null) {
+          setBattleState((prev) => ({
+            ...prev,
+            userHP: Math.max(0, Math.min(100, prev.userHP + scoreDelta)),
+            isTakingDamage: scoreDelta < 0,
+          }));
+          const timer = window.setTimeout(
+            () => setBattleState((prev) => ({ ...prev, isTakingDamage: false })),
+            500,
+          );
+          return () => window.clearTimeout(timer);
+        }
+      } catch (error) {
+        console.error("Judge fallback error:", error);
+      }
+    };
+
+    void requestJudge();
+    return () => {
+      isActive = false;
+    };
+  }, [judgeFallbackKey]);
+
+  useEffect(() => {
+    if (loading || status === "streaming" || status === "submitted") {
+      return;
+    }
+    const lastUserIndex = [...messages]
+      .map((message, index) => ({ message, index }))
+      .filter(({ message }) => message.role === "user")
+      .map(({ index }) => index)
+      .pop();
+    if (lastUserIndex === undefined) return;
+
+    const lastUserMessage = messages[lastUserIndex];
+    const lastUserText = lastUserMessage.parts
+      .filter((part) => part.type === "text")
+      .map((part) => (part as { text?: string }).text ?? "")
+      .join("")
+      .trim();
+    if (!lastUserText) return;
+
+    const hasMirrorReply = messages
+      .slice(lastUserIndex + 1)
+      .some((message) => {
+        if (message.role !== "assistant") return false;
+        const text = message.parts
+          .filter((part) => part.type === "text")
+          .map((part) => (part as { text?: string }).text ?? "")
+          .join("");
+        return text.trim().length > 0 && !isJudgeTaggedText(text);
+      });
+
+    if (hasMirrorReply || lastFallbackUserRef.current === lastUserText) {
+      return;
+    }
+
+    lastFallbackUserRef.current = lastUserText;
+    void (async () => {
+      try {
+        const resultMessages = await runAgent({
+          message: lastUserText,
+          sessionId: getOrCreateSessionId(),
+          systemPrompt: lawyerFallbackPrompt,
+          profilePrompt:
+            profile?.profilePrompt ?? getCookie("spoon_profile_prompt") ?? undefined,
+          toolkits: [],
+        });
+        const text = resultMessages.map(getMessageText).join("\n").trim();
+        if (!text) return;
+        setFallbackMessages((prev) => [
+          ...prev,
+          { role: "mirror", content: text },
+        ]);
+      } catch (error) {
+        console.error("Lawyer fallback error:", error);
+      }
+    })();
+  }, [
+    getCookie,
+    getOrCreateSessionId,
+    lawyerFallbackPrompt,
+    loading,
+    messages,
+    profile?.profilePrompt,
+    status,
   ]);
 
   const activeSpeaker = chatHistory.length

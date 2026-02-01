@@ -3,10 +3,12 @@
 import { useRouter } from "next/navigation";
 import PixelCharacter from "./components/pixel-character";
 import { useAppStore } from "./store/use-app-store";
+import { useProfileStore } from "./store/profile-store";
 
 export default function Page() {
   const router = useRouter();
   const resetSession = useAppStore((state) => state.resetSession);
+  const profile = useProfileStore((state) => state.profile);
 
   return (
     // 修改 1: h-full 改为 min-h-screen 甚至 min-h-[100dvh] 以适应移动端浏览器
@@ -29,6 +31,10 @@ export default function Page() {
         {/* 按钮: 调整内边距和字体大小以适应移动端 */}
         <button
           onClick={() => {
+            if (profile) {
+              router.push("/setup");
+              return;
+            }
             resetSession();
             router.push("/assessment");
           }}

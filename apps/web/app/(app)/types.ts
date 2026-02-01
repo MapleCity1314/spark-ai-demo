@@ -46,3 +46,27 @@ export interface Question {
     value: string; // Part of MBTI E/I, S/N, T/F, J/P
   }[];
 }
+
+export interface AssessmentQuestionOption {
+  id: string;
+  text: string;
+}
+
+export interface AssessmentQuestion {
+  id: string;
+  dimension?: string;
+  prompt: string;
+  options: AssessmentQuestionOption[];
+}
+
+export interface AssessmentQuestionnaire {
+  title: string;
+  version: string;
+  questions: AssessmentQuestion[];
+}
+
+export interface AssessmentAnswer {
+  questionId: string;
+  choiceId: string;
+  choiceText: string;
+}

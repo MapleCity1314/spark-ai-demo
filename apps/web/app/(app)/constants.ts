@@ -76,6 +76,14 @@ export const DIMENSIONS: { key: Dimension; title: string; desc: string }[] = [
   { key: 'Exit', title: 'Exit / 退出策略', desc: '什么时候卖？目标明确吗' }
 ];
 
+export const DIMENSION_PROMPTS: Record<Dimension, string> = {
+  'Why': '聚焦入场逻辑、基本面/叙事依据与可验证的数据支撑。',
+  'When': '聚焦入场时机、信号触发条件与反证条件。',
+  'How Much': '聚焦仓位与资金管理，明确上限、分批策略与风险敞口。',
+  'What If': '聚焦容错与止损机制，明确最坏情境与应对动作。',
+  'Exit': '聚焦退出策略，包含目标价、时间窗与撤退触发条件。'
+};
+
 export const HOT_TOKENS = ['SOL', 'BTC', 'ETH', 'PEPE', 'DOGE', 'PUMP'];
 
 export const MBTI_MAP: Record<MBTI, { name: string; style: string }> = {

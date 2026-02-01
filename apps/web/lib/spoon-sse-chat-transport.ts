@@ -9,6 +9,7 @@ type SpoonSseChatTransportOptions = {
   baseUrl: string;
   getBody?: () => Record<string, unknown>;
   fetchImpl?: typeof fetch;
+  ignoreToolEvents?: boolean;
 };
 
 const buildTextContent = (message: UIMessage) =>
@@ -19,6 +20,7 @@ const buildTextContent = (message: UIMessage) =>
 
 const parseSseToUiMessageStream = (
   stream: ReadableStream<Uint8Array>,
+  ignoreToolEvents: boolean,
 ): ReadableStream<UIMessageChunk> =>
   createUIMessageStream({
     execute: async ({ writer }) => {
@@ -48,6 +50,9 @@ const parseSseToUiMessageStream = (
       };
 
       const handleToolPart = (part: Record<string, unknown>) => {
+        if (ignoreToolEvents) {
+          return;
+        }
         const toolType = String(part.type ?? "");
         const toolName = toolType.startsWith("tool-")
           ? toolType.slice(5)
@@ -58,6 +63,16 @@ const parseSseToUiMessageStream = (
 
         if (!toolCallId) {
           return;
+        }
+
+        if (!toolInputSeen.has(toolCallId)) {
+          toolInputSeen.add(toolCallId);
+          writer.write({
+            type: "tool-input-available",
+            toolCallId,
+            toolName,
+            input,
+          });
         }
 
         if (
@@ -179,11 +194,23 @@ export class SpoonSseChatTransport<UI_MESSAGE extends UIMessage>
   private readonly baseUrl: string;
   private readonly getBody?: () => Record<string, unknown>;
   private readonly fetchImpl: typeof fetch;
+  private readonly ignoreToolEvents: boolean;
 
-  constructor({ baseUrl, getBody, fetchImpl }: SpoonSseChatTransportOptions) {
+  constructor({
+    baseUrl,
+    getBody,
+    fetchImpl,
+    ignoreToolEvents,
+  }: SpoonSseChatTransportOptions) {
     this.baseUrl = baseUrl;
     this.getBody = getBody;
-    this.fetchImpl = fetchImpl ?? fetch.bind(window);
+    this.ignoreToolEvents = Boolean(ignoreToolEvents);
+    if (fetchImpl) {
+      this.fetchImpl = fetchImpl;
+      return;
+    }
+    this.fetchImpl =
+      typeof window !== "undefined" ? fetch.bind(window) : fetch;
   }
 
   async sendMessages({
@@ -223,7 +250,7 @@ export class SpoonSseChatTransport<UI_MESSAGE extends UIMessage>
       throw new Error(errorText || "Upstream error");
     }
 
-    return parseSseToUiMessageStream(response.body);
+    return parseSseToUiMessageStream(response.body, this.ignoreToolEvents);
   }
 
   async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {

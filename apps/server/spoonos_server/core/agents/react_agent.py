@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -21,6 +22,19 @@ from spoonos_server.core.agents.judge_agent import ensure_judge_subagent_specs
 
 
 DEFAULT_SYSTEM_PROMPT = system_prompt
+_TOOL_CACHE: Dict[str, Dict[str, Any]] = {}
+_TOOL_CACHE_LOCK = threading.Lock()
+
+
+def _get_tool_cache(session_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not session_id:
+        return None
+    with _TOOL_CACHE_LOCK:
+        cache = _TOOL_CACHE.get(session_id)
+        if cache is None:
+            cache = {}
+            _TOOL_CACHE[session_id] = cache
+        return cache
 
 
 def _build_tool_list(tool_manager: ToolManager) -> str:
@@ -46,7 +60,20 @@ def create_react_agent(
     sub_agents: Optional[List[SubAgentSpec]],
 ) -> SpoonReactAI:
     selected_toolkits = resolve_toolkits(toolkits, config.toolkits.default_toolkits)
+    if system_prompt:
+        if "[ROLE:BATTLE]" in system_prompt:
+            selected_toolkits = ["crypto", "web"]
+            mcp_enabled = False
+        if "[ROLE:JUDGE]" in system_prompt:
+            selected_toolkits = []
+            mcp_enabled = False
+        if "[ROLE:PROFILE]" in system_prompt:
+            selected_toolkits = ["profile"]
+            mcp_enabled = False
     tools = load_toolkits(selected_toolkits)
+    if system_prompt and "[ROLE:BATTLE]" in system_prompt:
+        if "deepseek" in (provider or config.llm.provider):
+            tools = []
 
     if mcp_enabled is None:
         mcp_enabled = config.mcp.enabled
@@ -60,9 +87,13 @@ def create_react_agent(
         subagent_tool = SubAgentTool(subagent_map)
         tools.append(subagent_tool)
 
-    tools, tool_wrappers = wrap_tools_for_calls(
-        tools, context={"session_id": session_id} if session_id else None
-    )
+    tool_context: Optional[Dict[str, Any]] = None
+    if session_id:
+        tool_context = {"session_id": session_id}
+        tool_cache = _get_tool_cache(session_id)
+        if tool_cache is not None:
+            tool_context["tool_cache"] = tool_cache
+    tools, tool_wrappers = wrap_tools_for_calls(tools, context=tool_context)
 
     tool_manager = ToolManager(tools)
     tool_list = _build_tool_list(tool_manager)
@@ -80,6 +111,13 @@ def create_react_agent(
         prompt = f"{prompt}\n\nUser request prompt:\n{system_prompt.strip()}"
     if profile_prompt:
         prompt = f"{prompt}\n\nUser profile context:\n{profile_prompt.strip()}"
+    if system_prompt and "[ROLE:BATTLE]" in system_prompt:
+        prompt = (
+            f"{prompt}\n\nBattle output rules:\n"
+            "- 工具调用失败或无结果时，必须继续输出中文文本回应。\n"
+            "- 必须输出控方反驳，不得仅返回工具日志或空回复。\n"
+            "- 输出长度控制在150字以内。\n"
+        )
     prompt = (
         f"{prompt}\n\nEnabled toolkits: {toolkit_list}"
         f"\nAvailable toolkits: {available_list}"
@@ -241,6 +279,13 @@ async def stream_agent_events(
         token_task.cancel()
         if result:
             buffer = str(result)
+        if not buffer.strip():
+            if "[ROLE:BATTLE]" in (getattr(agent, "system_prompt", "") or ""):
+                buffer = (
+                    "异议！你的说法缺少关键依据：给出数据、时间窗口与止损边界，否则论点无法成立。"
+                )
+            else:
+                buffer = "（系统）未产生有效输出。"
         if buffer:
             yield _build_text_message(message_id, buffer, "done")
             judge_note_id = str(uuid.uuid4())

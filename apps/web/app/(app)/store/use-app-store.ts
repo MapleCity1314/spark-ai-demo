@@ -33,6 +33,7 @@ interface AppState {
   addAnswer: (answer: string) => void;
   removeLastAnswer: () => void;
   applyAssessmentResults: (answers: string[]) => void;
+  applyAssessmentProfile: (mbti: MBTI) => void;
   setTargetSymbol: (symbol: string) => void;
   setSelectedDims: (dims: Dimension[]) => void;
   toggleDimension: (dim: Dimension) => void;
@@ -70,6 +71,11 @@ export const useAppStore = create<AppState>((set) => ({
       mirrorMBTI: getMirrorMBTI(mbti)
     });
   },
+  applyAssessmentProfile: (mbti) =>
+    set({
+      userMBTI: mbti,
+      mirrorMBTI: getMirrorMBTI(mbti)
+    }),
   setTargetSymbol: (symbol) => set({ targetSymbol: symbol }),
   setSelectedDims: (dims) => set({ selectedDims: dims }),
   toggleDimension: (dim) =>

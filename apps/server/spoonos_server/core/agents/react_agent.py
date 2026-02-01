@@ -148,7 +148,7 @@ def _build_text_message(message_id: str, text: str, state: str) -> Dict[str, Any
 
 def _build_judge_note_text(speaker: str, message: str) -> str:
     if not message:
-        return "【法官旁注】未捕捉到有效内容，暂不作出理由。"
+        return "<judge.note>未捕捉到有效内容，暂不作出理由。</judge.note>"
     lowered = message.lower()
     has_trade_intent = any(
         keyword in lowered
@@ -168,7 +168,7 @@ def _build_judge_note_text(speaker: str, message: str) -> str:
     if not reason_parts:
         reason_parts.append("信息量有限，优先要求补充依据与边界条件")
     reason = "；".join(reason_parts)
-    return f"【法官旁注】{speaker}发言逻辑判断：{reason}。"
+    return f"<judge.note>{speaker}发言逻辑判断：{reason}。</judge.note>"
 
 
 async def stream_agent_events(

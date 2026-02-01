@@ -23,6 +23,7 @@ export interface BattleViewState {
 export interface Message {
   role: 'user' | 'mirror' | 'judge' | 'system';
   content: string;
+  judgeTag?: 'note' | 'report';
   dimension?: Dimension;
   scoreDelta?: number;
   marketData?: MarketData;

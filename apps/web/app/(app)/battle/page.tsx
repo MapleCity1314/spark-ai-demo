@@ -2,30 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Activity, User } from "lucide-react"; // 引入图标用于移动端导航
 import { useChat } from "@ai-sdk/react";
 import { nanoid } from "nanoid";
-import { UIMessage } from "ai";
+import type { UIMessage } from "ai";
 
-import HPBar from "../components/hp-bar";
-import BattleHeader from "../components/battle/battle-header";
 import BattleSidebar from "../components/battle/battle-sidebar";
-import BattleChat from "../components/battle/battle-chat";
-import BattleControlPanel from "../components/battle/battle-control-panel";
 import MarketPanel from "../components/battle/market-panel";
+import BattleMainPanel from "../components/battle/battle-main-panel";
+import BattleMobileNav from "../components/battle/battle-mobile-nav";
+import BattleSidePanel from "../components/battle/battle-side-panel";
+import type { MobileTab } from "../components/battle/battle-types";
 import { useAppStore } from "../store/use-app-store";
-import {
-  runAgent
-} from "../services/agentService";
-import { Message } from "../types";
+import { runAgent } from "../services/agentService";
+import type { Message } from "../types";
 import { SpoonSseChatTransport } from "@/lib/spoon-sse-chat-transport";
-
-// 定义移动端选项卡类型
-type MobileTab = "chat" | "status" | "market";
+import { LAWYER_SYSTEM_PROMPT, LAWYER_TOOLKITS } from "../lib/lawyer-agent";
 
 export default function BattlePage() {
   const router = useRouter();
-  
+
   // Store hooks
   const battleState = useAppStore((state) => state.battleState);
   const selectedDims = useAppStore((state) => state.selectedDims);
@@ -99,6 +94,11 @@ export default function BattlePage() {
     return parts.join("\n");
   }, [marketData, mirrorMBTI, selectedDims, targetSymbol, userMBTI]);
 
+  const lawyerSystemPrompt = useMemo(
+    () => `${LAWYER_SYSTEM_PROMPT}\n\n${requestPrompt}`,
+    [requestPrompt],
+  );
+
   const chatTransport = useMemo(
     () =>
       new SpoonSseChatTransport({
@@ -106,13 +106,13 @@ export default function BattlePage() {
           process.env.NEXT_PUBLIC_SPOONOS_API_BASE_URL ??
           "http://localhost:8000",
         getBody: () => ({
-          system_prompt: requestPrompt,
+          system_prompt: lawyerSystemPrompt,
           profile_prompt: getCookie("spoon_profile_prompt") ?? undefined,
-          toolkits: ["profile", "crypto", "web"],
+          toolkits: LAWYER_TOOLKITS,
           session_id: getOrCreateSessionId(),
         }),
       }),
-    [getCookie, getOrCreateSessionId, requestPrompt],
+    [getCookie, getOrCreateSessionId, lawyerSystemPrompt],
   );
 
   const { messages, sendMessage, status } = useChat({
@@ -138,6 +138,26 @@ export default function BattlePage() {
     } catch {
       return null;
     }
+  };
+
+  const parseJudgeTaggedMessage = (text: string): Message | null => {
+    const reportMatch = text.match(/<judge\.report>([\s\S]*?)<\/judge\.report>/);
+    if (reportMatch) {
+      return {
+        role: "judge",
+        content: reportMatch[1]?.trim() ?? "",
+        judgeTag: "report",
+      };
+    }
+    const noteMatch = text.match(/<judge\.note>([\s\S]*?)<\/judge\.note>/);
+    if (noteMatch) {
+      return {
+        role: "judge",
+        content: noteMatch[1]?.trim() ?? "",
+        judgeTag: "note",
+      };
+    }
+    return null;
   };
 
   const initBattle = useCallback(async () => {
@@ -229,7 +249,6 @@ export default function BattlePage() {
     [loading, selectedDims.length, sendMessage, status]
   );
 
-
   const introMessage = useMemo(() => {
     if (!selectedDims.length) return "";
     return `庭审正式开启。被告人 ${userMBTI} 申请买入 $${targetSymbol}。控方审计员 ${mirrorMBTI} 已入场，当前维度：${selectedDims[0]}。请开始你的辩解。`;
@@ -246,6 +265,11 @@ export default function BattlePage() {
         .map((part) => (part as { text?: string }).text ?? "")
         .join("");
       if (!text.trim()) {
+        continue;
+      }
+      const taggedJudgeMessage = parseJudgeTaggedMessage(text);
+      if (taggedJudgeMessage) {
+        mapped.push(taggedJudgeMessage);
         continue;
       }
       let role: Message["role"] = message.role === "user" ? "user" : "mirror";
@@ -266,7 +290,7 @@ export default function BattlePage() {
     return mapped;
   }, [introMessage, messages]);
 
-    const handleFinalVerdict = useCallback(async () => {
+  const handleFinalVerdict = useCallback(async () => {
     if (loading) return;
     const hasKey = await window.aistudio.hasSelectedApiKey();
     if (!hasKey) {
@@ -348,117 +372,49 @@ export default function BattlePage() {
   }, [messages, setEffect]);
 
   return (
-    // 修改 1: h-[100dvh] 适应移动端视口，flex-col 适应手机布局
     <div className="w-full h-[100dvh] flex flex-col lg:flex-row overflow-hidden bg-[#05050a] relative">
-      
-      {/* 
-         左侧栏 (Status/Sidebar) 
-         手机端: 只有 mobileTab === 'status' 时显示
-         桌面端: 始终显示 (hidden lg:flex)
-      */}
-      <div className={`
-        ${mobileTab === 'status' ? 'flex w-full absolute inset-0 z-40 bg-[#05050a] p-4 pt-20 overflow-y-auto' : 'hidden'} 
-        lg:relative lg:flex lg:w-auto lg:p-0 lg:z-auto
-      `}>
-        {/* 注意: 如果 BattleSidebar 内部有写死的宽高，可能需要去该组件微调，但这里给了 flex 容器 */}
-        <BattleSidebar userMBTI={userMBTI} mirrorMBTI={mirrorMBTI} speaker={activeSpeaker} />
-      </div>
-
-      {/* 
-         中间主栏 (Chat)
-         手机端: 只有 mobileTab === 'chat' 时显示 (flex)
-         桌面端: 始终显示 (flex-1)
-      */}
-      <div className={`
-        flex-1 flex-col bg-[#0a0a15] relative border-r-0 lg:border-r-4 border-slate-800
-        ${mobileTab === 'chat' ? 'flex' : 'hidden lg:flex'}
-      `}>
-        <BattleHeader
-          targetSymbol={targetSymbol}
-          onAbort={() => {
-            if (window.confirm("ABORT TRIAL? ALL DATA WILL BE LOST.")) router.push("/setup");
-          }}
-        />
-
-        <div className="bg-[#05050a] border-b border-slate-800 pt-4 pb-2 px-2">
-          <HPBar userHP={battleState.userHP} userName={userMBTI} mirrorName={mirrorMBTI} />
-        </div>
-
-        <BattleChat
-          history={chatHistory}
-          displayContent=""
+      <BattleSidePanel activeTab={mobileTab} tab="status">
+        <BattleSidebar
+          userMBTI={userMBTI}
+          mirrorMBTI={mirrorMBTI}
           speaker={activeSpeaker}
-          chatEndRef={chatEndRef}
         />
+      </BattleSidePanel>
 
-        {effect === "objection" && (
-          <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-            {/* 动画字体稍微适配手机 */}
-            <div className="bg-red-600 border-[4px] md:border-[8px] border-yellow-400 text-white font-arcade p-4 md:p-8 rotate-[-10deg] animate-bounce text-2xl md:text-4xl shadow-[8px_8px_0_#000] md:shadow-[12px_12px_0_#000] pixel-text-shadow">
-              异议 OBJECTION!
-            </div>
-          </div>
-        )}
+      <BattleMainPanel
+        activeTab={mobileTab}
+        targetSymbol={targetSymbol}
+        userMBTI={userMBTI}
+        mirrorMBTI={mirrorMBTI}
+        userHP={battleState.userHP}
+        history={chatHistory}
+        speaker={activeSpeaker}
+        loading={loading || status === "streaming" || status === "submitted"}
+        effect={effect}
+        chatEndRef={chatEndRef}
+        onAbort={() => {
+          if (window.confirm("ABORT TRIAL? ALL DATA WILL BE LOST.")) {
+            router.push("/setup");
+          }
+        }}
+        onQuickAction={(text) => handleAction("message", text)}
+        onSubmitMessage={(text) => handleAction("message", text)}
+        onFinalVerdict={handleFinalVerdict}
+      />
 
-        <BattleControlPanel
-          loading={loading || status === "streaming" || status === "submitted"}
-          historyLength={chatHistory.length}
-          onQuickAction={(text) => handleAction("message", text)}
-          onSubmitMessage={(text) => handleAction("message", text)}
-          onFinalVerdict={handleFinalVerdict}
+      <BattleSidePanel activeTab={mobileTab} tab="market">
+        <MarketPanel
+          marketData={marketData}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
         />
-        
-        {/* 移动端底部垫高，防止内容被导航栏遮挡 */}
-        <div className="h-16 lg:hidden shrink-0" /> 
-      </div>
+      </BattleSidePanel>
 
-      {/* 
-         右侧栏 (Market)
-         手机端: 只有 mobileTab === 'market' 时显示
-         桌面端: 始终显示 (hidden lg:flex)
-      */}
-      <div className={`
-        ${mobileTab === 'market' ? 'flex w-full absolute inset-0 z-40 bg-[#05050a] p-4 pt-20 overflow-y-auto' : 'hidden'} 
-        lg:relative lg:flex lg:w-auto lg:p-0 lg:z-auto
-      `}>
-        <MarketPanel marketData={marketData} activeTab={activeTab} onTabChange={setActiveTab} />
-      </div>
-
-      {/* 
-         移动端底部导航栏 (新增)
-         只在屏幕 < lg (1024px) 时显示
-      */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#05050a] border-t-2 border-slate-800 flex items-center justify-around z-50 pb-safe">
-        <button 
-          onClick={() => setMobileTab("status")}
-          className={`flex flex-col items-center justify-center gap-1 p-2 ${mobileTab === 'status' ? 'text-yellow-400' : 'text-slate-500'}`}
-        >
-          <User size={20} />
-          <span className="text-[10px] font-arcade uppercase">STATUS</span>
-        </button>
-        
-        <button 
-          onClick={() => setMobileTab("chat")}
-          className={`flex flex-col items-center justify-center gap-1 p-2 ${mobileTab === 'chat' ? 'text-cyan-400' : 'text-slate-500'}`}
-        >
-          <div className="relative">
-            <MessageSquare size={20} />
-            {status === "streaming" && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
-            )}
-          </div>
-          <span className="text-[10px] font-arcade uppercase">BATTLE</span>
-        </button>
-        
-        <button 
-          onClick={() => setMobileTab("market")}
-          className={`flex flex-col items-center justify-center gap-1 p-2 ${mobileTab === 'market' ? 'text-green-400' : 'text-slate-500'}`}
-        >
-          <Activity size={20} />
-          <span className="text-[10px] font-arcade uppercase">DATA</span>
-        </button>
-      </div>
-
+      <BattleMobileNav
+        activeTab={mobileTab}
+        onTabChange={setMobileTab}
+        isStreaming={status === "streaming"}
+      />
     </div>
   );
 }

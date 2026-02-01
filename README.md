@@ -1,175 +1,62 @@
-# SpoonOS (Turborepo)
+<p align="center">
+  <img src="logo.png" alt="DOPPLE logo" width="160" />
+</p>
 
-SpoonOS monorepo with a Next.js UI and a FastAPI server.
+<h1 align="center">DOPPLE (逆转人格)</h1>
 
-## Toolkits and MCP
+<p align="center">
+  <strong>让“静态用户画像”活过来：转化为可对话、可执行、实时响应的 Agent 能力</strong>
+</p>
 
-By default, `profile` and `web` toolkits are enabled. The server decides whether MCP is enabled
-based on its internal config (no env vars required). Tools are loaded only when
-the request explicitly enables them.
+<p align="center">
+  <a href="#-技术栈">
+    <img src="https://img.shields.io/badge/Next.js-15/16-black?style=for-the-badge&logo=next.js" alt="Next.js" />
+  </a>
+  <a href="#-技术栈">
+    <img src="https://img.shields.io/badge/FastAPI-0.110-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  </a>
+  <a href="#-技术栈">
+    <img src="https://img.shields.io/badge/SpoonOS-Agent_Core-orange?style=for-the-badge" alt="SpoonOS" />
+  </a>
+</p>
 
-### Available toolkits
+---
 
-- `web`: Web scraping tools (requires `spoon_toolkits.web`)
-- `neo`: Neo blockchain tools (requires `spoon_toolkits.crypto.neo`)
-- `profile`: MBTI profile tools (requires `spoonos_server.core.tools.profile_tools`)
-- `mbti_trader_questionnaire`: MBTI 量化交易者问卷工具（通过 `profile` toolkit 注入）
-- `test`: Demo tools (`EchoTool`, `DelayTool`, `ErrorTool`, `JsonRenderTool`)
+## 💡 为什么需要 DOPPLE？
 
-### Enable toolkits from the UI (AI SDK)
+在传统的业务流程中，**用户画像（Persona）** 往往是躺在 PPT 或数据库里的静态标签（如“高消费、MBTI-INTJ”）。这些画像与实际的用户交互、产品功能之间存在巨大的**断层**。
 
-Pass `toolkits` / `mcp_enabled` / `sub_agents` in the request body to override defaults. The API route
-`apps/web/app/(test-chat)/api/chat/route.ts` forwards these into the OpenAI-
-compatible provider options.
+**DOPPLE 填补了这个断层：**
+它将 MBTI 量化指标作为“人格引擎”，结合动态技能插件（Skills），将画像直接转化为具备特定性格色彩、能调用业务工具、能流式对话的 **实时 Agent**。
 
-Example (React):
+> **从“看画像”进化为“跟画像对话”，并让画像自动执行任务。**
 
-```ts
-sendMessage(
-  { text: "Hello" },
-  {
-    body: {
-      toolkits: ["web", "neo"],
-      mcp_enabled: true,
-      sub_agents: [
-        {
-          name: "researcher",
-          system_prompt: "You are a deep research assistant.",
-        },
-      ],
-    },
-  }
-);
-```
+---
 
-## Using this example
+## ✨ 核心特性
 
-Run the following command:
+### 🧠 1. 人格驱动引擎 (MBTI-Based)
+不仅仅是预设 Prompt，而是将 MBTI 量化为结构化 Profile。系统根据画像特征自动调整对话语气、策略优先级和反馈风格。
 
-```sh
-npx create-turbo@latest
-```
+### ⚡ 2. 自研 UI Message Chunk Transport
+针对 AI 流式输出优化的传输协议。支持将 SSE（Server-Sent Events）数据流无缝转换为 UI 层的“块状渲染”，提供极致流畅的打字机交互体验。
 
-## What's inside?
+### 🧩 3. 插件化技能系统 (Agent Skills)
+基于 **SpoonOS** 架构，每一个 `Skill` 都是独立的模块。
+- **易扩展**：只需在 `skills` 目录下添加 `SKILL.md`，即可注入新能力。
+- **解耦**：业务逻辑（工具调用）与对话逻辑（人格）完全分离。
 
-This Turborepo includes the following packages/apps:
+### 🚀 4. 业务落地友好
+输出标准化的结构化数据，直接对接现有运营系统的分层、触达、内容推送等环节。
 
-### Apps and Packages
+---
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## 🏗️ 系统架构
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+DOPPLE 采用典型的 **Monorepo** 架构，确保前后端协作的高效性：
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
-
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo build --filter=docs
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
-
-### Develop
-
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo dev --filter=web
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-```
-cd my-turborepo
-
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo login
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-```
-# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
-turbo link
-
-# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+```text
+DOPPLE
+├── apps/web           # Next.js 16 + React 19 (感知层：极致的流式 UI)
+├── apps/server        # FastAPI (大脑：SpoonOS 驱动的 Agent 逻辑)
+└── packages/shared    # 共享配置与类型定义

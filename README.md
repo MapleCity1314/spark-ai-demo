@@ -22,6 +22,12 @@
 
 ---
 
+## 💡演示demo
+
+<a href="https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221uqEZMUFPZ8AY-lTNoM5Ll6DZ5FEIQoOw%22%5D,%22action%22:%22open%22,%22userId%22:%22107083301847056452220%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing" target="_blank">
+<img src="https://img.shields.io/badge/Google_AI_Studio-Open-009688?style=for-the-badge&logo=google" alt="Google AI Studio" />演示站点
+</a>
+
 ## 💡 为什么需要 DOPPLE？
 
 在传统的业务流程中，**用户画像（Persona）** 往往是躺在 PPT 或数据库里的静态标签（如“高消费、MBTI-INTJ”）。这些画像与实际的用户交互、产品功能之间存在巨大的**断层**。

@@ -12,7 +12,7 @@ const BattleHeader: React.FC<BattleHeaderProps> = ({ targetSymbol, onAbort }) =>
       <div className="flex items-center gap-3">
         <Gavel className="text-yellow-500" size={20} />
         <div>
-          <h3 className="font-arcade text-[10px] text-white uppercase tracking-tight">MIRROR_COURT_PRO</h3>
+          <h3 className="font-arcade text-[10px] text-white uppercase tracking-tight">DOPPLE_PRO</h3>
           <p className="font-arcade text-[7px] text-slate-500 uppercase mt-1">Audit: ${targetSymbol}</p>
         </div>
       </div>

@@ -13,7 +13,7 @@ const WelcomePage: React.FC = () => {
       <div className="grid-floor"></div>
       <div className="border-[6px] border-white p-16 text-center bg-blue-900 shadow-[16px_16px_0_#000] relative z-10">
         <h1 className="text-7xl font-arcade text-yellow-400 mb-8 pixel-text-shadow leading-tight uppercase">
-          MIRROR<br />TRADER
+          DOPPLE<br />逆转人格
         </h1>
         <p className="text-blue-200 mb-10 font-arcade text-[10px] uppercase tracking-widest">Decisions expose your weakness</p>
         <button

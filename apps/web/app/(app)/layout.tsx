@@ -16,8 +16,8 @@ const bodyFont = ZCOOL_KuaiLe({
 });
 
 export const metadata: Metadata = {
-  title: "Mirror Court - 像素交易法庭",
-  description: "Mirror Court trading debate experience"
+  title: "DOPPLE 逆转人格",
+  description: "DOPPLE 逆转人格交易辩论体验"
 };
 
 export default function AppLayout({

@@ -19,7 +19,7 @@ export default function Page() {
         
         {/* 标题: 手机端变小 (text-4xl)，大屏保持大字体 (md:text-7xl) */}
         <h1 className="text-4xl sm:text-5xl md:text-7xl font-arcade text-yellow-400 mb-6 md:mb-8 pixel-text-shadow leading-tight uppercase">
-          MIRROR<br />TRADER
+          DOPPLE<br />逆转人格
         </h1>
         
         <p className="text-blue-200 mb-8 md:mb-10 font-arcade text-[8px] md:text-[10px] uppercase tracking-widest">
